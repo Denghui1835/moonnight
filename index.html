@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#050607" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23050607'/%3E%3Ccircle cx='30' cy='30' r='18' fill='%23b9d4cf'/%3E%3Ccircle cx='39' cy='23' r='16' fill='%23050607'/%3E%3C/svg%3E"
+    />
+    <title>月夜 · MOONNIGHT</title>
+    <script type="module" crossorigin src="/moonnight/assets/index-DJ8TcPtw.js"></script>
+    <link rel="stylesheet" crossorigin href="/moonnight/assets/index-DIlFCzjK.css">
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="stage"></canvas>
+      <div class="vignette"></div>
+      <div class="grain"></div>
+
+      <video id="cam" class="hidden" playsinline muted autoplay></video>
+
+      <div id="hud" class="hidden">
+        <div class="hud-top">
+          <div class="hud-left">
+            <div class="lbl">STAGE</div>
+            <div id="round" class="num">第 1 关</div>
+          </div>
+          <div class="hud-center">
+            <div id="dots" class="dots"></div>
+            <div id="moveinfo" class="moveinfo"></div>
+          </div>
+          <div class="hud-right">
+            <div class="lbl">跳对</div>
+            <div id="score" class="num">0</div>
+          </div>
+        </div>
+
+        <div class="bottom">
+          <div id="cue" class="cue">
+            <span id="cue-name">站住</span>
+            <span id="cue-key" class="cue-key">↓</span>
+          </div>
+          <div class="meter"><i id="meter"></i></div>
+          <div id="sub" class="sub"></div>
+        </div>
+
+        <div id="tutbar" class="tutorial-bar hidden">
+          <button id="btn-replay" class="ghost small">重看这个动作</button>
+          <button id="btn-replayall" class="ghost small">重看全部</button>
+          <button id="btn-skip" class="ghost small">跳过教学</button>
+        </div>
+      </div>
+
+      <div id="start" class="screen">
+        <div class="title-wrap">
+          <h1>月&nbsp;夜</h1>
+          <div class="en">M O O N N I G H T</div>
+          <div class="tagline">DEAD BEAT · 最后一拍</div>
+        </div>
+        <p class="brief">
+          午夜十二点，旧剧院的灯一盏盏亮起。<br />
+          镜子里有人朝你伸出手。跟着她跳——跳错一拍，他们就会吃掉你的脑子。
+        </p>
+        <div class="actions">
+          <button id="btn-cam" class="primary">用摄像头跟练</button>
+          <button id="btn-keys" class="ghost">键盘模式（方向键）</button>
+        </div>
+        <p id="loadnote" class="note">摄像头模式需要加载姿势模型，约 3 秒</p>
+      </div>
+
+      <div id="result" class="screen hidden">
+        <div class="result-inner">
+          <div class="lbl">BRAIN EATEN</div>
+          <h2>他们吃掉了你的脑子</h2>
+          <p id="final-line" class="final-line"></p>
+          <div class="stats">
+            <div><span>撑到</span><b id="final-level">第 1 关</b></div>
+            <div><span>跳对</span><b id="final-hits">0</b></div>
+            <div><span>队伍里</span><b id="final-heads">3 人</b></div>
+          </div>
+          <button id="btn-again" class="primary">再跳一次</button>
+        </div>
+      </div>
+
+      <div id="ending" class="screen hidden">
+        <div class="result-inner">
+          <div class="lbl">ENDING</div>
+          <h2>谢幕</h2>
+          <p id="ending-line" class="final-line"></p>
+          <div class="stats">
+            <div><span>跳对</span><b id="ending-hits">0</b></div>
+            <div><span>完美</span><b id="ending-perfect">0</b></div>
+          </div>
+          <button id="btn-again2" class="primary">再跳一次</button>
+        </div>
+      </div>
+
+      <div id="toast" class="toast"></div>
+    </div>
+  </body>
+</html>
