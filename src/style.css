@@ -90,6 +90,19 @@ body {
   transition: opacity 0.4s;
 }
 
+/* darken the floor under the cue so it stays readable against the figure */
+#hud::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 240px;
+  background: linear-gradient(to top, rgba(2, 4, 5, 0.72), rgba(2, 4, 5, 0.3) 46%, rgba(2, 4, 5, 0));
+  z-index: -1;
+  pointer-events: none;
+}
+
 #hud.hidden {
   opacity: 0;
 }
@@ -164,34 +177,111 @@ body {
   background: var(--bone);
 }
 
-.combo {
-  position: absolute;
-  left: 50%;
-  top: 84px;
-  transform: translateX(-50%);
-  font-size: 13px;
-  letter-spacing: 0.28em;
-  color: var(--moon);
-  opacity: 0;
-  transition: opacity 0.25s;
-  text-shadow: 0 0 18px rgba(185, 212, 207, 0.5);
+.moveinfo {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  color: rgba(108, 131, 128, 0.85);
+  font-variant-numeric: tabular-nums;
 }
 
-.combo.show {
-  opacity: 0.85;
-}
-
-.prompt {
+.bottom {
   position: absolute;
   left: 50%;
-  bottom: 46px;
+  bottom: 34px;
   transform: translateX(-50%);
-  font-size: 13px;
+  width: min(560px, 84vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 11px;
+}
+
+.cue {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 19px;
   letter-spacing: 0.3em;
-  color: rgba(232, 226, 214, 0.75);
-  text-transform: uppercase;
+  color: var(--bone);
+  text-shadow: 0 0 22px rgba(0, 0, 0, 0.9);
+  transition: opacity 0.2s;
+}
+
+.cue-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+  letter-spacing: 0;
+  color: var(--moon);
+  border: 1px solid rgba(185, 212, 207, 0.42);
+  border-radius: 3px;
+  box-shadow: 0 0 16px rgba(185, 212, 207, 0.16);
+}
+
+.cue-key.hidden {
+  display: none;
+}
+
+.meter {
+  width: 190px;
+  height: 2px;
+  background: rgba(185, 212, 207, 0.12);
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--moon);
+  box-shadow: 0 0 12px rgba(185, 212, 207, 0.8);
+  transition: width 0.08s linear, opacity 0.2s;
+}
+
+.sub {
+  min-height: 18px;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: rgba(232, 226, 214, 0.55);
+  text-align: center;
+}
+
+.tutorial-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  display: flex;
+  justify-content: center;
+  /* shrink-to-fit would otherwise clamp to half the viewport (left: 50%) */
+  width: max-content;
+  max-width: calc(100vw - 28px);
+  gap: 10px;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.tutorial-bar.hidden {
+  display: none;
+}
+
+.ghost.small {
+  padding: 7px 15px;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  background: rgba(4, 8, 9, 0.55);
   white-space: nowrap;
-  transition: opacity 0.3s;
+  flex: 0 0 auto;
+}
+
+/* when the tutorial bar is up, lift the cue out of its way */
+#hud.tutorial-on .bottom {
+  bottom: 86px;
 }
 
 /* ---------- screens ---------- */
@@ -233,6 +323,13 @@ h1 {
   font-size: 10px;
   letter-spacing: 0.5em;
   color: var(--moon-dim);
+}
+
+.tagline {
+  margin-top: 8px;
+  font-size: 11px;
+  letter-spacing: 0.32em;
+  color: rgba(185, 212, 207, 0.5);
 }
 
 .brief {
@@ -315,6 +412,14 @@ button {
   gap: 14px;
 }
 
+h2 {
+  font-size: 30px;
+  font-weight: 200;
+  letter-spacing: 0.24em;
+  color: var(--bone);
+  text-shadow: 0 0 34px rgba(185, 212, 207, 0.22);
+}
+
 .big-num {
   font-size: 92px;
   font-weight: 200;
@@ -361,8 +466,9 @@ button {
   line-height: 2;
   letter-spacing: 0.18em;
   color: rgba(232, 226, 214, 0.7);
-  max-width: 420px;
+  max-width: 460px;
   min-height: 52px;
+  white-space: pre-line;
 }
 
 .toast {
