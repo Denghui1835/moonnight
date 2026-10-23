@@ -95,7 +95,7 @@ async function boot(port) {
     ],
     { stdio: "ignore", detached: false }
   );
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 200; i++) {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/json/version`);
       if (r.ok) return proc;
@@ -226,13 +226,65 @@ async function desktopRun(port) {
   return c;
 }
 
+// Production builds do not expose __game; this run proves the live bundle by DOM only.
+async function liveRun(port) {
+  console.log("\n=== live site (DOM only) ===");
+  const c = await newTarget(port, true);
+  await c.send("Page.navigate", { url: URL });
+  const loaded = await c.waitFor(`document.readyState === 'complete' && !!document.getElementById('btn-keys')`, 30000);
+  check("live title loads", loaded);
+  await sleep(1200);
+  check("live: pad hidden on the title", await c.eval(`document.getElementById('hud').classList.contains('hidden') && getComputedStyle(document.getElementById('hud')).opacity === '0'`));
+
+  await c.click("#btn-keys");
+  const tut = await c.waitFor(`!document.getElementById('tutbar').classList.contains('hidden')`, 30000);
+  check("live: tutorial bar appears", tut);
+  check("live: pad is visible and has four keys", await c.eval(`getComputedStyle(document.getElementById('touchpad')).display === 'flex' && document.querySelectorAll('#touchpad button').length === 4`));
+  await c.shot("30-live-phone-tutorial");
+
+  const tapUntil = async (target) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < 60000) {
+      const st = await c.eval(`(() => {
+        const k = document.getElementById('cue-key');
+        return { key: k && !k.classList.contains('hidden') ? k.textContent.trim() : '',
+          round: document.getElementById('round').textContent,
+          score: Number(document.getElementById('score').textContent) || 0 };
+      })()`);
+      if (st.key) {
+        const box = await c.eval(selBox(`#touchpad button[data-key="${st.key}"]`));
+        if (box && box.w > 0) {
+          await c.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box.x + box.w / 2, y: box.y + box.h / 2 }] });
+          await c.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        }
+      }
+      if (st.round === "第 1 关" && st.score >= target) return st;
+      await sleep(80);
+    }
+    return null;
+  };
+
+  const tutDone = await tapUntil(4);
+  check("live: tapping completes the tutorial", !!tutDone, tutDone);
+  const lvl = await tapUntil(5);
+  check("live: tapping scores in level 1", !!lvl, lvl);
+  check("live: pad stays on screen in level", await c.eval(`getComputedStyle(document.getElementById('touchpad')).display === 'flex'`));
+  await c.shot("31-live-phone-level");
+  return c;
+}
+
 const port = 9333 + (Number(process.env.QA_PORT_OFFSET) || 0);
 const proc = await boot(port);
+const live = !!process.env.QA_LIVE;
 let mobileCdp;
 let desktopCdp;
 try {
-  mobileCdp = await mobileRun(port);
-  desktopCdp = await desktopRun(port);
+  if (live) {
+    mobileCdp = await liveRun(port);
+  } else {
+    mobileCdp = await mobileRun(port);
+    desktopCdp = await desktopRun(port);
+  }
 } catch (e) {
   console.error("TOUCH QA crashed:", e);
   report.crashed = String(e);
