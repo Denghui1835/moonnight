@@ -222,6 +222,27 @@ document.getElementById("btn-replay")!.addEventListener("click", () => game?.rep
 document.getElementById("btn-replayall")!.addEventListener("click", () => game?.replayAll());
 document.getElementById("btn-skip")!.addEventListener("click", () => game?.skipTutorial());
 
+/* ---------------- touch ---------------- */
+
+const touchpad = document.getElementById("touchpad")!;
+for (const btn of touchpad.querySelectorAll<HTMLButtonElement>("button[data-key]")) {
+  const key = btn.dataset.key!;
+  const press = (e: PointerEvent) => {
+    e.preventDefault();
+    btn.classList.add("on");
+    game?.pushKey(key);
+  };
+  const release = (e: PointerEvent) => {
+    e.preventDefault();
+    btn.classList.remove("on");
+    game?.releaseKey();
+  };
+  btn.addEventListener("pointerdown", press);
+  btn.addEventListener("pointerup", release);
+  btn.addEventListener("pointercancel", release);
+  btn.addEventListener("pointerleave", release);
+}
+
 /* ---------------- input ---------------- */
 
 window.addEventListener("keydown", (e) => {

@@ -37,6 +37,16 @@ const PASS = 0.45;
 const PERFECT = 0.75;
 const LEAD_IN = 2;
 
+/** 每关开头的一句叙事，之后让位给连对提示 */
+const LEVEL_LINES: Record<number, string> = {
+  1: "她们开始靠近了。",
+  2: "它们曾经也站在这里。",
+  3: "老树上，系着一条褪色的红绳。",
+  4: "镜中的她，只比你快半拍。",
+  5: "所有人都在等你。",
+  6: "最后一遍。跳完就去看月亮。",
+};
+
 const KEY_MOVE: Record<string, string> = { "↑": "spread", "↓": "slump", "←": "clawL", "→": "clawR" };
 
 function normalizeKey(k: string): string {
@@ -44,18 +54,22 @@ function normalizeKey(k: string): string {
     case "ArrowUp":
     case "w":
     case "W":
+    case "↑":
       return "↑";
     case "ArrowDown":
     case "s":
     case "S":
+    case "↓":
       return "↓";
     case "ArrowLeft":
     case "a":
     case "A":
+    case "←":
       return "←";
     case "ArrowRight":
     case "d":
     case "D":
+    case "→":
       return "→";
     default:
       return "";
@@ -344,7 +358,7 @@ export class Game {
   private tickIntro(): void {
     const k = this.phaseT;
     if (k > 1.1 && !this.musicOn) this.startMusic(104, 0);
-    if (k > 0.2) this.hud.subtitle = "午夜，排练厅。";
+    if (k > 0.2) this.hud.subtitle = "午夜，旧剧院。";
     if (k > 2.6) this.hud.subtitle = "镜子里，有人在等你。";
     if (k > 4.4) this.hud.subtitle = "跟着她跳。";
     if (k > 6.2) this.startTutorial();
@@ -466,7 +480,7 @@ export class Game {
     this.hud.moveTotal = this.plan.moveIds.length;
     this.hud.moveIndex = 0;
     this.hud.dots = this.results.slice();
-    this.hud.subtitle = n === 1 ? "她们开始靠近了。" : n === MAX_LEVEL ? "最后一遍。" : "";
+    this.hud.subtitle = LEVEL_LINES[n] ?? "";
     this.startMusic(this.plan.bpm, n);
   }
 
@@ -495,7 +509,8 @@ export class Game {
     this.hud.moveIndex = idx + 1;
     this.hud.moveName = move.name;
     this.hud.key = move.key;
-    this.hud.subtitle = this.combo >= 3 ? `连对 ${this.combo}` : "";
+    this.hud.subtitle =
+      t < 4 ? LEVEL_LINES[this.level] ?? "" : this.combo >= 3 ? `连对 ${this.combo}` : "";
     this.sample();
     if (!this.resolved && local > plan.beatsPerMove - 0.15) this.judgeLevel(idx);
   }

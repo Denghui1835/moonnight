@@ -284,6 +284,73 @@ body {
   bottom: 86px;
 }
 
+/* ---------- touch controls ---------- */
+
+.touchpad {
+  display: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .touchpad {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 9px;
+    z-index: 6;
+    /* the HUD is click-through; the pad must opt back in to be tappable */
+    pointer-events: auto;
+  }
+
+  .touchpad button {
+    width: 62px;
+    height: 58px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    background: rgba(5, 9, 10, 0.62);
+    border: 1px solid rgba(185, 212, 207, 0.28);
+    border-radius: 4px;
+    color: var(--moon-dim);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .touchpad button b {
+    font-size: 18px;
+    font-weight: 400;
+    color: rgba(232, 226, 214, 0.86);
+  }
+
+  .touchpad button span {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    color: rgba(108, 131, 128, 0.9);
+  }
+
+  .touchpad button.on {
+    background: rgba(185, 212, 207, 0.18);
+    border-color: rgba(185, 212, 207, 0.7);
+  }
+
+  #hud .bottom {
+    bottom: 92px;
+  }
+
+  #hud.tutorial-on .bottom {
+    bottom: 148px;
+  }
+
+  #hud.tutorial-on .tutorial-bar {
+    bottom: 92px;
+  }
+}
+
 /* ---------- screens ---------- */
 
 .screen {
