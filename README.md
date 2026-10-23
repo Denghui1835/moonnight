@@ -11,7 +11,8 @@
 
 ## 在线试玩
 
-- **GitHub Pages**：_部署后填入_
+- **GitHub Pages**：<https://denghui1835.github.io/moonnight/>
+- **配乐试听**：[moonnight-metal.mp3](https://denghui1835.github.io/moonnight/music/moonnight-metal.mp3)
 - 推荐桌面浏览器（Chrome / Edge）。摄像头模式需要授权；不方便开摄像头就选键盘模式，难度完全一致。
 - 第一次进入摄像头模式会加载本地姿势模型（约 5.6 MB），之后走缓存。
 
