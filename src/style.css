@@ -402,6 +402,13 @@ button {
   color: rgba(108, 131, 128, 0.75);
 }
 
+.keys-hint {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: rgba(108, 131, 128, 0.5);
+}
+
 /* ---------- result ---------- */
 
 .result-inner {
