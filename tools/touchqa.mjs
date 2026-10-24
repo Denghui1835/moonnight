@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 // Touch-control E2E: emulates a 375x812 phone and taps the on-screen pad.
 //   node tools/touchqa.mjs
-const TMP = process.env.QA_OUT || path.join(path.dirname(fileURLToPath(import.meta.url)), ".out");
+const TMP = path.resolve(process.env.QA_OUT || path.join(path.dirname(fileURLToPath(import.meta.url)), ".out"));
 const SHOTS = path.join(TMP, "shots");
 const EDGE = process.env.EDGE_BIN || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 const URL = process.env.QA_URL || "http://localhost:5173/";
@@ -23,12 +23,23 @@ class Cdp {
     this.ws = new WebSocket(wsUrl);
     this.id = 0;
     this.pending = new Map();
+    this.errors = [];
     this.ws.onmessage = (e) => {
       const m = JSON.parse(e.data);
       if (m.id && this.pending.has(m.id)) {
         const { res, rej } = this.pending.get(m.id);
         this.pending.delete(m.id);
         m.error ? rej(new Error(JSON.stringify(m.error))) : res(m.result);
+        return;
+      }
+      if (m.method === "Runtime.exceptionThrown") {
+        this.errors.push("exception: " + (m.params.exceptionDetails?.exception?.description || m.params.exceptionDetails?.text));
+      }
+      if (m.method === "Log.entryAdded" && m.params.entry.level === "error") {
+        this.errors.push("log: " + m.params.entry.text);
+      }
+      if (m.method === "Runtime.consoleAPICalled" && m.params.type === "error") {
+        this.errors.push("console: " + m.params.args.map((a) => a.value ?? a.description).join(" "));
       }
     };
   }
@@ -91,6 +102,12 @@ async function boot(port) {
       "--disable-extensions",
       "--autoplay-policy=no-user-gesture-required",
       "--disable-features=CalculateNativeWinOcclusion",
+      // 本机其他 Edge 窗口会挤掉 headless 页面的前台状态，导致 rAF 停摆
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-background-timer-throttling",
+      // 国内镜像直连可达，走系统代理反而被掐断：QA_DIRECT=1 时绕开代理
+      ...(process.env.QA_DIRECT ? ["--no-proxy-server"] : []),
       "about:blank",
     ],
     { stdio: "ignore", detached: false }
@@ -112,6 +129,7 @@ async function newTarget(port, mobile) {
   await c.open();
   await c.send("Page.enable");
   await c.send("Runtime.enable");
+  await c.send("Log.enable").catch(() => {});
   await c.send("Page.bringToFront").catch(() => {});
   await c.send("Emulation.setDeviceMetricsOverride", {
     width: mobile ? 375 : 1280,
@@ -322,6 +340,19 @@ async function liveRun(port) {
   const lvl = await tapUntil(5);
   check("live: tapping scores in level 1", !!lvl, lvl);
   check("live: pad stays on screen in level", await c.eval(`getComputedStyle(document.getElementById('touchpad')).display === 'flex'`));
+
+  // 托管方（Qoder Sites）会在右下角注入徽标，镜像上必须验证它没有压住可点区域
+  const badge = await c.eval(`(() => {
+    const b = document.getElementById('qoder-sites-watermark');
+    if (!b) return null;
+    const hit = (sel) => { const e = document.querySelector(sel); if (!e) return 0; const r = e.getBoundingClientRect();
+      const x = Math.max(0, Math.min(r.right, b.getBoundingClientRect().right) - Math.max(r.left, b.getBoundingClientRect().left));
+      const y = Math.max(0, Math.min(r.bottom, b.getBoundingClientRect().bottom) - Math.max(r.top, b.getBoundingClientRect().top));
+      return +(x * y).toFixed(1); };
+    return { pad: hit('#touchpad'), tutbar: hit('#tutbar'), cue: hit('#hud .bottom'), rect: b.getBoundingClientRect().toJSON() };
+  })()`);
+  check("live: host badge covers no touch target", !badge || (badge.pad === 0 && badge.tutbar === 0 && badge.cue === 0), badge || "no badge on this host");
+  check("live: zero page errors", c.errors.length === 0, c.errors);
   await c.shot("31-live-phone-level");
   return c;
 }

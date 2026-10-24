@@ -108,6 +108,10 @@ async function boot(port, extraArgs = []) {
       "--disable-extensions",
       "--autoplay-policy=no-user-gesture-required",
       "--disable-features=CalculateNativeWinOcclusion",
+      // 本机同时开着别的 Edge 窗口时，headless 页面会被判定为遮挡 -> 页面 hidden -> rAF 停摆
+      "--disable-backgrounding-occluded-windows",
+      "--disable-renderer-backgrounding",
+      "--disable-background-timer-throttling",
       ...extraArgs,
       "about:blank",
     ],
@@ -132,6 +136,8 @@ async function newTarget(port, cdp) {
   await c.send("Runtime.enable");
   await c.send("Log.enable");
   await c.send("Page.bringToFront").catch(() => {});
+  await c.send("Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {});
+  await c.send("Page.setWebLifecycleState", { state: "active" }).catch(() => {});
   await c.send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
   c.targetId = t.id;
   c.port = port;
@@ -355,6 +361,74 @@ async function skipRun(port) {
   await closeTarget(c);
 }
 
+async function stage3dRun(port) {
+  console.log("\n=== 3D stage: fallback, resize, frame rate ===");
+  const FPS = (ms) => `new Promise((res) => { let n = 0; const t0 = performance.now(); const loop = () => { n++; const d = performance.now() - t0; if (d < ${ms}) requestAnimationFrame(loop); else res(+(n / (d / 1000)).toFixed(1)); }; requestAnimationFrame(loop); })`;
+  const LOST = `(() => { const c = document.getElementById('stage3d'); const gl = c.getContext('webgl2') || c.getContext('webgl'); const ext = gl && gl.getExtension('WEBGL_lose_context'); if (!ext) return false; ext.loseContext(); return true; })()`;
+
+  const c = await newTarget(port);
+  await c.send("Page.navigate", { url: URL });
+  await c.waitFor(`document.readyState === 'complete' && !!document.getElementById('stage')`, 15000);
+  await sleep(800);
+  await c.click("#btn-keys");
+  await c.waitFor(`!!window.__game && (__game.phase === 'tutorial' || __game.phase === 'level')`, 25000);
+  await sleep(1500);
+  const live = await c.eval(`(() => { const s3 = document.getElementById('stage3d'), s2 = document.getElementById('stage'); return {
+    renderer: !!__game.renderer, display3d: getComputedStyle(s3).display, offscreen: s2.classList.contains('offscreen'),
+    canvasSize: [s3.width, s3.height], cssSize: [s3.clientWidth, s3.clientHeight], viewport: [innerWidth, innerHeight] }; })()`);
+  check("WebGL available -> 3D stage takes over", live.renderer && live.display3d !== "none" && live.offscreen, live);
+  const frame3d = await c.shot("35-stage3d-level");
+  check("3D stage paints a detailed frame", frame3d.size > 200_000, { bytes: frame3d.size });
+
+  await c.send("Emulation.setDeviceMetricsOverride", { width: 900, height: 600, deviceScaleFactor: 1, mobile: false });
+  await sleep(600);
+  await c.send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 3, mobile: true });
+  await sleep(900);
+  const sized = await c.eval(`(() => { const s3 = document.getElementById('stage3d'); return { w: s3.width, h: s3.height, cw: s3.clientWidth, ch: s3.clientHeight, vw: innerWidth, vh: innerHeight }; })()`);
+  check("resize keeps the 3D canvas at viewport size (no stretch)", Math.abs(sized.w / sized.h - sized.vw / sized.vh) < 0.02 && sized.cw === sized.vw && sized.ch === sized.vh, sized);
+  const portrait = await c.shot("36-stage3d-portrait");
+  check("portrait 3D frame still paints", portrait.size > 200_000, { bytes: portrait.size });
+
+  await c.eval(AUTO);
+  const fps3d = await c.eval(FPS(3000));
+  let lossOk = false;
+  let lossDetail = {};
+  if (await c.eval(LOST)) {
+    lossOk = await c.waitFor(`__game.renderer === null && !document.getElementById('stage').classList.contains('offscreen')`, 5000);
+    const t0 = await c.eval(`({ time: +__game.time.toFixed(2), phase: __game.phase })`);
+    await sleep(1200);
+    const t1 = await c.eval(`({ time: +__game.time.toFixed(2), phase: __game.phase, toast: document.getElementById('toast').textContent })`);
+    const shot = await c.shot("37-stage2d-after-loss");
+    lossDetail = { fellBack: lossOk, clockAdvanced: t1.time > t0.time, toast: t1.toast, bytes: shot.size };
+    lossOk = lossOk && t1.time > t0.time && /2D/.test(t1.toast) && shot.size > 200_000;
+  } else {
+    lossDetail = { error: "WEBGL_lose_context unavailable" };
+  }
+  check("context loss falls back to 2D without a blank screen", lossOk, lossDetail);
+  const fps2d = await c.eval(FPS(3000));
+  check("phone-sized 3D stays within 2x of the 2D frame rate", fps3d >= 15 && fps3d >= fps2d * 0.5, { fps3d, fps2d });
+  check("3D run: no unexpected page errors", c.errors.filter((e) => !/WebGL|context/i.test(e)).length === 0, c.errors);
+  await closeTarget(c);
+
+  const nogl = await newTarget(port);
+  await nogl.send("Page.addScriptToEvaluateOnNewDocument", {
+    source: `const g = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (t, ...a) { if (/webgl/i.test(String(t))) return null; return g.call(this, t, ...a); };`,
+  });
+  await nogl.send("Page.navigate", { url: URL });
+  await nogl.waitFor(`document.readyState === 'complete' && !!document.getElementById('stage')`, 15000);
+  await sleep(600);
+  await nogl.click("#btn-keys");
+  await nogl.waitFor(`!!window.__game && (__game.phase === 'tutorial' || __game.phase === 'level')`, 25000);
+  await sleep(1200);
+  const fallback = await nogl.eval(`(() => { const s3 = document.getElementById('stage3d'), s2 = document.getElementById('stage'); return {
+    renderer: !!__game.renderer, display3d: getComputedStyle(s3).display, offscreen: s2.classList.contains('offscreen'),
+    phase: __game.phase, hits: __game.stats.hits }; })()`);
+  check("no WebGL -> 2D stage keeps running", !fallback.renderer && fallback.display3d === "none" && !fallback.offscreen, fallback);
+  const noglShot = await nogl.shot("38-stage2d-no-webgl");
+  check("2D fallback frame is not blank", noglShot.size > 200_000, { bytes: noglShot.size });
+  await closeTarget(nogl);
+}
+
 async function cameraLeakRun(port) {
   console.log("\n=== camera fail -> keyboard, tracks closed ===");
   const c = await newTarget(port);
@@ -402,38 +476,39 @@ async function cameraRun(port) {
   await c.waitFor(`document.readyState === 'complete' && !!document.getElementById('stage')`, 15000);
   await sleep(600);
   await c.click("#btn-cam");
-  const started = await c.waitFor(`!!window.__game`, 60000);
+  // 软渲染 + 3D 冷启动下，加载 5.6MB 姿势模型可能很慢；超时只让检查失败，不要让整轮崩掉
+  const started = await c.waitFor(`!!window.__game`, 120000);
   await sleep(1500);
   const state = await c.eval(`({
-    mode: __game && __game.mode,
-    status: __game && __game.tracker ? __game.tracker.status : null,
+    mode: window.__game && window.__game.mode,
+    status: window.__game && window.__game.tracker ? window.__game.tracker.status : null,
     videoHidden: document.getElementById('cam').classList.contains('hidden'),
     trackStates: document.getElementById('cam').srcObject ? document.getElementById('cam').srcObject.getTracks().map((t) => t.readyState) : null,
     videoSize: [document.getElementById('cam').videoWidth, document.getElementById('cam').videoHeight],
-    phase: __game && __game.phase
+    phase: window.__game && window.__game.phase
   })`);
   check("camera mode loads the pose model", started && state.mode === "camera" && state.status === "ready" && state.trackStates && state.trackStates.every((s) => s === "live"), state);
   await c.shot("09-camera");
 
-  await c.waitFor(`__game.phase === 'tutorial'`, 20000);
+  await c.waitFor(`window.__game.phase === 'tutorial'`, 20000);
   // nobody in frame: the tutorial should keep asking, so skip it
   await c.waitFor(`!document.getElementById('tutbar').classList.contains('hidden')`, 5000);
-  const tutWait = await c.eval(`({ sub: __game.hud.subtitle, best: +__game.best.toFixed(2), sawPose: __game.sawPose })`);
+  const tutWait = await c.eval(`({ sub: window.__game.hud.subtitle, best: +window.__game.best.toFixed(2), sawPose: window.__game.sawPose })`);
   await c.click("#btn-skip");
   await sleep(500);
-  const lv1 = await c.eval(`({ phase: __game.phase, level: __game.level, sawPose: __game.sawPose })`);
-  const advanced = await c.waitFor(`__game.level >= 2 || __game.phase === 'ending'`, 40000);
-  const lv2 = await c.eval(`({ phase: __game.phase, level: __game.level, stats: __game.stats, results: __game.results.slice() })`);
+  const lv1 = await c.eval(`({ phase: window.__game.phase, level: window.__game.level, sawPose: window.__game.sawPose })`);
+  const advanced = await c.waitFor(`window.__game.level >= 2 || window.__game.phase === 'ending'`, 40000);
+  const lv2 = await c.eval(`({ phase: window.__game.phase, level: window.__game.level, stats: window.__game.stats, results: window.__game.results.slice() })`);
   check("camera levels advance without a detected body (lenient dropouts)", advanced && (lv2.level >= 2 || lv2.phase === "ending"), { tutWait, lv1, lv2 });
-  const camState = await c.eval(`(() => { const v = document.getElementById('cam'); return { hasStream: !!v.srcObject, tracks: v.srcObject ? v.srcObject.getTracks().map((t) => ({ kind: t.kind, state: t.readyState, enabled: t.enabled, muted: t.muted })) : null, status: __game.tracker ? __game.tracker.status : null, hidden: v.classList.contains('hidden') }; })()`);
+  const camState = await c.eval(`(() => { const v = document.getElementById('cam'); return { hasStream: !!v.srcObject, tracks: v.srcObject ? v.srcObject.getTracks().map((t) => ({ kind: t.kind, state: t.readyState, enabled: t.enabled, muted: t.muted })) : null, status: window.__game.tracker ? window.__game.tracker.status : null, hidden: v.classList.contains('hidden') }; })()`);
   check("camera run: camera track still live at level 2", camState.tracks && camState.tracks.every((t) => t.state === "live"), camState);
   await c.shot("10-camera-level");
 
   // synthesize an unplug: the app must fall back to keys without freezing
-  await c.eval(`document.getElementById('cam').srcObject.getVideoTracks()[0].dispatchEvent(new Event('ended')); true`);
-  const degraded = await c.waitFor(`__game.mode === 'keys' && !__game.tracker`, 5000);
-  const lostState = await c.eval(`(() => { const v = document.getElementById('cam'); return { mode: __game.mode, tracker: !!__game.tracker, videoHidden: v.classList.contains('hidden'), hasStream: !!v.srcObject, cue: document.getElementById('cue-key').textContent, toast: document.getElementById('toast').textContent, phase: __game.phase }; })()`);
-  check("camera track ending mid-run degrades to keyboard", degraded && lostState.videoHidden && !lostState.hasStream && lostState.cue !== "", lostState);
+  const unplugged = await c.eval(`(() => { const v = document.getElementById('cam'); const t = v.srcObject && v.srcObject.getVideoTracks()[0]; if (!t) return false; t.dispatchEvent(new Event('ended')); return true; })()`);
+  const degraded = await c.waitFor(`window.__game.mode === 'keys' && !window.__game.tracker`, 5000);
+  const lostState = await c.eval(`(() => { const v = document.getElementById('cam'); return { mode: window.__game.mode, tracker: !!window.__game.tracker, videoHidden: v.classList.contains('hidden'), hasStream: !!v.srcObject, cue: document.getElementById('cue-key').textContent, toast: document.getElementById('toast').textContent, phase: window.__game.phase }; })()`);
+  check("camera track ending mid-run degrades to keyboard", unplugged && degraded && lostState.videoHidden && !lostState.hasStream && lostState.cue !== "", { unplugged, ...lostState });
   check("camera loss toast explains the switch", /键盘/.test(lostState.toast || ""), lostState);
   report.logs.push({ run: "camera", state, tutWait, lv1, lv2, errors: c.errors });
   const realErrors = c.errors.filter((e) => !e.includes("Failed to fetch") && !e.includes("net::"));
@@ -442,18 +517,23 @@ async function cameraRun(port) {
 }
 
 const procs = [];
+// 另一个会话可能同时在跑 QA，端口冲突时用 QA_PORT_OFFSET 错开
+const OFF = Number(process.env.QA_PORT_OFFSET || 0);
+const P1 = 9333 + OFF;
+const P2 = 9334 + OFF;
 try {
-  const p1 = await boot(9333);
+  const p1 = await boot(P1);
   procs.push(p1);
-  const probe = new Cdp((await (await fetch("http://127.0.0.1:9333/json/list")).json())[0].webSocketDebuggerUrl);
-  await keyboardRun(9333);
-  await skipRun(9333);
-  await cameraLeakRun(9333);
+  const probe = new Cdp((await (await fetch(`http://127.0.0.1:${P1}/json/list`)).json())[0].webSocketDebuggerUrl);
+  await keyboardRun(P1);
+  await skipRun(P1);
+  await stage3dRun(P1);
+  await cameraLeakRun(P1);
   await probe.send("Browser.close").catch(() => {});
 
-  const p2 = await boot(9334, ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--disable-gpu"]);
+  const p2 = await boot(P2, ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--disable-gpu"]);
   procs.push(p2);
-  await cameraRun(9334);
+  await cameraRun(P2);
 } catch (e) {
   console.error("QA crashed:", e);
   report.errors.push(String(e && e.stack ? e.stack : e));

@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 // 视觉自测：截几张关键画面，不做断言。
 //   node tools/shot.mjs
 // QA_URL / EDGE_BIN / QA_OUT 可覆盖。
-const TMP = process.env.QA_OUT || path.join(path.dirname(fileURLToPath(import.meta.url)), ".out");
+const TMP = path.resolve(process.env.QA_OUT || path.join(path.dirname(fileURLToPath(import.meta.url)), ".out"));
 const SHOTS = path.join(TMP, "shots");
 const EDGE = process.env.EDGE_BIN || "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 const URL = process.env.QA_URL || "http://localhost:5173/";
@@ -101,6 +101,8 @@ async function boot(port) {
       "--disable-extensions",
       "--autoplay-policy=no-user-gesture-required",
       "--disable-features=CalculateNativeWinOcclusion",
+      // 国内镜像直连可达，走系统代理反而被掐断：QA_DIRECT=1 时绕开代理
+      ...(process.env.QA_DIRECT ? ["--no-proxy-server"] : []),
       "about:blank",
     ],
     { stdio: "ignore", detached: false }

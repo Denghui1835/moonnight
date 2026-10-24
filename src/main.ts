@@ -49,6 +49,20 @@ if (stage3d) {
   canvas3d.style.display = "none";
 }
 
+/** 驱动掉上下文（GPU 重置、显存不足）时 3D 画布会永久变黑，必须退回 2D。 */
+function dropStage3D(announce: boolean) {
+  stage3d = null;
+  canvas3d.style.display = "none";
+  canvas.classList.remove("offscreen");
+  game?.degradeTo2D();
+  resize();
+  if (announce) toast("3D 舞台中断，已切回 2D");
+}
+canvas3d.addEventListener("webglcontextlost", (e) => {
+  e.preventDefault();
+  dropStage3D(true);
+});
+
 /* ---------------- title backdrop ---------------- */
 
 function idleScene(t: number): Scene {

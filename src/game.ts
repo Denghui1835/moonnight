@@ -287,6 +287,11 @@ export class Game {
     }
   }
 
+  /** WebGL 上下文丢失：本局改用 2D 舞台渲染，判定与节奏不受影响。 */
+  degradeTo2D(): void {
+    this.renderer = null;
+  }
+
   /* ---------------- tick ---------------- */
 
   tick(now: number, w: number, h: number): void {

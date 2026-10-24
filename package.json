@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "qa": "node tools/qa.mjs",
     "touchqa": "node tools/touchqa.mjs",
-    "mirror": "node tools/mirror.mjs"
+    "mirror": "node tools/mirror.mjs",
+    "snapshot": "node tools/sync-snapshot.mjs",
+    "qr": "node tools/qr.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.1.1",

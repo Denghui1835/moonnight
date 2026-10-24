@@ -1,6 +1,6 @@
 // Incremental snapshot sync for D:\MoonNight.
 // Explicitly skips dependencies, test scratch/cache and reproducible output.
-import { readdir, stat, mkdir, copyFile, chmod } from "node:fs/promises";
+import { readdir, stat, mkdir, copyFile, chmod, rm } from "node:fs/promises";
 import { join, relative, extname } from "node:path";
 
 const SRC = process.cwd();
@@ -63,9 +63,59 @@ async function sizeOf(dir) {
   return { bytes, files };
 }
 
+// Remove excluded leftovers (earlier full-tree copies) so the snapshot matches the rule.
+async function prune(dir) {
+  const removed = { dirs: [], logs: 0, locked: 0 };
+  for (const name of ["node_modules", "dist-mirror", join("tools", ".edgecheck")]) {
+    const p = join(dir, name);
+    try {
+      const s = await stat(p);
+      if (s.isDirectory()) {
+        const sub = await sizeOf(p);
+        await rm(p, { recursive: true, force: true });
+        removed.dirs.push(`${name} (${(sub.bytes / 1024 / 1024).toFixed(1)} MB)`);
+      }
+    } catch {
+      removed.locked++;
+    }
+  }
+  const out = join(dir, "tools", ".out");
+  try {
+    for (const name of await readdir(out)) {
+      if (!name.startsWith("profile-")) continue;
+      const p = join(out, name);
+      try {
+        const sub = await sizeOf(p);
+        await rm(p, { recursive: true, force: true });
+        removed.dirs.push(`tools/.out/${name} (${(sub.bytes / 1024 / 1024).toFixed(1)} MB)`);
+      } catch {
+        removed.locked++;
+      }
+    }
+  } catch {}
+  async function dropLogs(d) {
+    for (const entry of await readdir(d, { withFileTypes: true })) {
+      const p = join(d, entry.name);
+      if (entry.isDirectory()) await dropLogs(p);
+      else if (entry.isFile() && entry.name.endsWith(".log")) {
+        try {
+          await rm(p, { force: true });
+          removed.logs++;
+        } catch {
+          removed.locked++;
+        }
+      }
+    }
+  }
+  await dropLogs(dir);
+  return removed;
+}
+
 const stats = { copied: 0, skipped: 0, bytes: 0 };
 await walk(SRC, DEST, "", stats);
+const removed = await prune(DEST);
 const total = await sizeOf(DEST);
 const mb = (n) => (n / 1024 / 1024).toFixed(1);
 console.log(`copied ${stats.copied} files (${mb(stats.bytes)} MB), skipped ${stats.skipped} unchanged`);
+console.log(`pruned: ${removed.dirs.join(", ") || "nothing"}; ${removed.logs} *.log removed${removed.locked ? `, ${removed.locked} locked` : ""}`);
 console.log(`snapshot ${norm(DEST)}: ${mb(total.bytes)} MB, ${total.files} files`);

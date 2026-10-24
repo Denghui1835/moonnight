@@ -13,9 +13,9 @@
 
 | 入口 | 链接 |
 |---|---|
-| **国内镜像（推荐，大陆直连）** | <https://moonnight-c1n29gwia6s.qoder.zone/> |
+| **国内镜像（推荐，大陆直连）** | <https://moonnight-mirror-rvzkngbzcr9.qoder.website/> |
 | **GitHub Pages（主站）** | <https://denghui1835.github.io/moonnight/> |
-| 配乐试听 | [GitHub Pages](https://denghui1835.github.io/moonnight/music/moonnight-metal.mp3) · [镜像](https://moonnight-c1n29gwia6s.qoder.zone/music/moonnight-metal.mp3) |
+| 配乐试听 | [GitHub Pages](https://denghui1835.github.io/moonnight/music/moonnight-metal.mp3) · [镜像](https://moonnight-mirror-rvzkngbzcr9.qoder.website/music/moonnight-metal.mp3) |
 
 - 两个入口是同一份构建，内容一致；GitHub Pages 在国内部分网络/代理下会打不开，优先用镜像。
 - 手机扫码（左：镜像，右：GitHub Pages）：
