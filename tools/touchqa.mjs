@@ -336,12 +336,14 @@ async function liveRun(port) {
 
   const tapUntil = async (target) => {
     const t0 = Date.now();
+    let last = null;
     while (Date.now() - t0 < 60000) {
       const st = await c.eval(`(() => {
         const k = document.getElementById('cue-key');
         return { key: k && !k.classList.contains('hidden') ? k.textContent.trim() : '',
           round: document.getElementById('round').textContent,
-          score: Number(document.getElementById('score').textContent) || 0 };
+          score: Number(document.getElementById('score').textContent) || 0,
+          dead: !document.getElementById('result').classList.contains('hidden') };
       })()`);
       if (st.key) {
         const box = await c.eval(selBox(`#touchpad button[data-key="${st.key}"]`));
@@ -351,15 +353,18 @@ async function liveRun(port) {
         }
       }
       if (st.round === "第 1 关" && st.score >= target) return st;
+      if (st.dead) return { ...st, died: true };
+      last = st;
       await sleep(80);
     }
-    return null;
+    // 带上最后一次看到的画面状态：FAIL 只给 null 的话，分不清是被判死、还是 cue 和按键对不上
+    return last ? { ...last, timedOut: true } : null;
   };
 
   const tutDone = await tapUntil(4);
-  check("live: tapping completes the tutorial", !!tutDone, tutDone);
+  check("live: tapping completes the tutorial", !!tutDone && !tutDone.died, tutDone);
   const lvl = await tapUntil(5);
-  check("live: tapping scores in level 1", !!lvl, lvl);
+  check("live: tapping scores in level 1", !!lvl && !lvl.died, lvl);
   check("live: pad stays on screen in level", await c.eval(`getComputedStyle(document.getElementById('touchpad')).display === 'flex'`));
 
   // 托管方（Qoder Sites）会在右下角注入徽标，镜像上必须验证它没有压住可点区域
