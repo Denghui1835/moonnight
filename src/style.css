@@ -410,6 +410,20 @@ body {
     border-color: rgba(185, 212, 207, 0.7);
   }
 
+  /* 当前该按的键：手机上没有实体键盘，靠这个把屏幕上的 ↑←↓→ 和舞蹈板对上 */
+  .touchpad button.cue {
+    border-color: rgba(232, 226, 214, 0.66);
+    box-shadow: 0 0 12px rgba(185, 212, 207, 0.34);
+  }
+
+  .touchpad button.cue b {
+    color: #e8e2d6;
+  }
+
+  .touchpad button.cue span {
+    color: rgba(185, 212, 207, 0.92);
+  }
+
   #hud .bottom {
     bottom: 92px;
   }

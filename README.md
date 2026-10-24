@@ -18,7 +18,7 @@
 | **GitHub Pages（主站）** | <https://denghui1835.github.io/moonnight/> |
 | 配乐试听 | [GitHub Pages](https://denghui1835.github.io/moonnight/music/moonnight-metal.mp3) · [镜像 A](https://moonnight-c1n29gwia6s.qoder.zone/music/moonnight-metal.mp3) |
 
-- 三个入口是同一份代码的两个构建（Pages 用 `/moonnight/` 前缀，镜像用根路径），玩法完全一致；GitHub Pages 在国内部分网络/代理下会打不开，优先用镜像。两个镜像域名分属两套 Qoder 账号凭证，每次重新构建后都要各发一次；本轮 Pages 与镜像 A 都是 `index-CY0B431_.js` + `index-BWH0rTF7.css`，镜像 B 还差一次另一套凭证的发布（旧版 `index-DKMki3oD.js`，玩法一致，只是少了触屏操作提示与结算标签的修正）。
+- 三个入口是同一份代码的两个构建（Pages 用 `/moonnight/` 前缀，镜像用根路径），玩法完全一致；GitHub Pages 在国内部分网络/代理下会打不开，优先用镜像。两个镜像域名分属两套 Qoder 账号凭证，每次重新构建后都要各发一次；截至 2026-10-24，镜像 A 已是 `index-BiBqq_i1.js` + `index-CapNrH1f.css`（含可点静音键），Pages 仍是 `index-CY0B431_.js` + `index-BWH0rTF7.css`（`gh-pages` 提交在本地待推，github.com 连不上），镜像 B 是更旧的 `index-DKMki3oD.js`（归另一套凭证）。三者玩法一致，差别只在触屏操作提示、结算标签与静音键这几处界面修正。
 - 部署不是 push 到 `main` 就自动生效：Pages 走 `gh-pages` 分支，仓库里没有 workflow，改完要按 `docs/验证记录.md` 第 11.4 节把 `dist/` 推上 `gh-pages`。
 - 手机扫码（左：镜像，右：GitHub Pages）：
 
@@ -93,7 +93,7 @@ npm run dev      # http://localhost:5173
 npm run build    # 产出 dist/
 npm run preview  # 预览生产构建
 npm run qa       # 桌面 E2E（44 项，含 9 项 3D 回退/帧率；建议 QA_URL 指向 npm run build + vite preview 的生产构建）
-npm run touchqa  # 手机触控 E2E（27 项，375×812 设备模拟；QA_LIVE=1 走线上 DOM 冒烟）
+npm run touchqa  # 手机触控 E2E（28 项，375×812 设备模拟；QA_LIVE=1 走线上 DOM 冒烟）
 npm run mirror   # dist -> dist-mirror（国内镜像用的根路径版）
 npm run qr       # 重新生成试玩二维码
 npm run snapshot # 增量同步快照到 D:\MoonNight（排除依赖与验收临时目录）

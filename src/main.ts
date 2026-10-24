@@ -16,6 +16,8 @@ const dotsEl = document.getElementById("dots") as HTMLElement;
 const meterEl = document.getElementById("meter") as HTMLElement;
 const tutbar = document.getElementById("tutbar") as HTMLElement;
 const toastEl = document.getElementById("toast") as HTMLElement;
+const touchpad = document.getElementById("touchpad") as HTMLElement;
+const padBtns = Array.from(touchpad.querySelectorAll<HTMLButtonElement>("button[data-key]"));
 const startScreen = document.getElementById("start") as HTMLElement;
 const resultScreen = document.getElementById("result") as HTMLElement;
 const endingScreen = document.getElementById("ending") as HTMLElement;
@@ -124,6 +126,12 @@ function syncHud(h: Hud) {
   const key = mode === "keys" ? h.key : "";
   text("cue-key", key);
   toggle(keyEl, "hidden", !key);
+
+  // 手机上四个舞蹈键没有实体键盘可对照，把当前提示键亮起，第一次上手才不用先认方向箭头
+  if (cache.padKey !== key) {
+    cache.padKey = key;
+    for (const b of padBtns) b.classList.toggle("cue", !!key && b.dataset.key === key);
+  }
 
   const sig = h.dots.join(",");
   if (cache.dots !== sig) {
@@ -282,8 +290,7 @@ document.getElementById("btn-skip")!.addEventListener("click", () => game?.skipT
 
 /* ---------------- touch ---------------- */
 
-const touchpad = document.getElementById("touchpad")!;
-for (const btn of touchpad.querySelectorAll<HTMLButtonElement>("button[data-key]")) {
+for (const btn of padBtns) {
   const key = btn.dataset.key!;
   const press = (e: PointerEvent) => {
     e.preventDefault();

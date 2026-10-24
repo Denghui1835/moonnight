@@ -196,10 +196,12 @@ async function mobileRun(port) {
   const buttons = await c.eval(`[...document.querySelectorAll('#touchpad button')].map((b) => { const r=b.getBoundingClientRect(); return { key:b.dataset.key, x:+r.left.toFixed(1), y:+r.top.toFixed(1), w:+r.width.toFixed(1), h:+r.height.toFixed(1) }; })`);
   check("touch pad has 4 reachable buttons", buttons.length === 4 && buttons.every((b) => b.h >= 44 && b.w >= 44), buttons);
   const bar = await c.eval(selBox("#tutbar"));
-  const cue = await c.eval(selBox("#cue"));
   const noOverlap = (a, b) => !a || !b || a.y + a.h <= b.y + 0.5 || b.y + b.h <= a.y + 0.5;
+  // 教学关开头动作名还是空的，`.cue` 会塌成 0×0，这时候量重叠等于没测——先等有字再量
+  await c.waitFor(`__game.hud.moveName !== ''`, 10000);
+  const cue = await c.eval(selBox("#cue"));
   check("pad does not overlap tutorial bar", noOverlap(pad, bar), { pad, bar });
-  check("pad does not overlap move cue", noOverlap(pad, cue) || !cue || cue.w === 0, { pad, cue });
+  check("pad does not overlap move cue", !!cue && cue.w > 0 && noOverlap(pad, cue), { pad, cue, name: await c.eval(`__game.hud.moveName`) });
   check("pad stays inside viewport", pad && pad.x >= 0 && pad.y + pad.h <= 812.5 && pad.x + pad.w <= 375.5, pad);
 
   // 静音键：手机上没有 M，这是唯一能闭嘴的入口，所以它必须真的能点、且不被舞蹈板压住
@@ -247,6 +249,24 @@ async function mobileRun(port) {
   const padLvl = await c.eval(selBox("#touchpad"));
   const hudBottom = await c.eval(selBox("#hud .bottom"));
   check("pad still visible in level and clear of HUD", padLvl.display === "flex" && noOverlap(padLvl, hudBottom), { padLvl, hudBottom });
+
+  // 手机上没有实体键盘可对照：cue 必须点亮且只点亮当前提示键那一个舞蹈键
+  const cueLit = await c.eval(`new Promise((res) => {
+    const t0 = performance.now();
+    const tick = () => {
+      const g = window.__game;
+      if (g && g.hud.key) {
+        const lit = [...document.querySelectorAll('#touchpad button')].filter((b) => b.classList.contains('cue'));
+        const want = document.querySelector('#touchpad button[data-key="' + g.hud.key + '"]');
+        if (lit.length === 1 && lit[0] === want) return res({ ok: true, key: g.hud.key, lit: lit[0].dataset.key });
+      }
+      if (performance.now() - t0 > 12000)
+        return res({ ok: false, key: g && g.hud.key, lit: [...document.querySelectorAll('#touchpad button.cue')].map((b) => b.dataset.key) });
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  })`);
+  check("the cue key lights up exactly one pad button", cueLit.ok, cueLit);
 
   // level tap — 窗口只有不到半拍，CDP 往返会错过；在页面里按帧判定并直接点按钮
   const tapInWindow = (mode) =>
