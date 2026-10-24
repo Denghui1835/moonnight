@@ -303,9 +303,16 @@ for (const btn of touchpad.querySelectorAll<HTMLButtonElement>("button[data-key]
 
 /* ---------------- input ---------------- */
 
+function toggleMute() {
+  const muted = audio.toggleMute();
+  text("btn-mute", muted ? "♪ 已静音" : "♪ 声音");
+}
+
+document.getElementById("btn-mute")!.addEventListener("click", toggleMute);
+
 window.addEventListener("keydown", (e) => {
   if (e.key === "m" || e.key === "M") {
-    audio.toggleMute();
+    toggleMute();
     return;
   }
   if (!game) return;

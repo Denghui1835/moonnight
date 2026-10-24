@@ -201,6 +201,15 @@ async function mobileRun(port) {
   check("pad does not overlap tutorial bar", noOverlap(pad, bar), { pad, bar });
   check("pad does not overlap move cue", noOverlap(pad, cue) || !cue || cue.w === 0, { pad, cue });
   check("pad stays inside viewport", pad && pad.x >= 0 && pad.y + pad.h <= 812.5 && pad.x + pad.w <= 375.5, pad);
+
+  // 静音键：手机上没有 M，这是唯一能闭嘴的入口，所以它必须真的能点、且不被舞蹈板压住
+  const muteBox = await c.eval(selBox("#btn-mute"));
+  const muteHit = await c.eval(`(() => { const r = document.getElementById('btn-mute').getBoundingClientRect(); const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { hit: !!(el && el.closest && el.closest('#btn-mute')), tag: el ? el.id || el.className : null }; })()`);
+  check("mute button is reachable on phone", !!muteBox && muteBox.w >= 44 && muteBox.h >= 34 && muteHit.hit, { muteBox, muteHit });
+  check("mute button does not overlap the touch pad", noOverlap(muteBox, pad), { muteBox, pad });
+  const muteToggled = await c.eval(`(() => { const b = document.getElementById('btn-mute'); const before = b.textContent; b.click(); return { before, after: b.textContent, muted: window.__game.audio.muted }; })()`);
+  check("tapping mute actually mutes and relabels", muteToggled.muted === true && muteToggled.after === "♪ 已静音" && muteToggled.before !== muteToggled.after, muteToggled);
+  await c.eval(`document.getElementById('btn-mute').click()`);
   await c.shot("21-phone-tutorial");
 
   // tap the indicated key inside a do-window
@@ -375,9 +384,9 @@ async function liveRun(port) {
       const x = Math.max(0, Math.min(r.right, b.getBoundingClientRect().right) - Math.max(r.left, b.getBoundingClientRect().left));
       const y = Math.max(0, Math.min(r.bottom, b.getBoundingClientRect().bottom) - Math.max(r.top, b.getBoundingClientRect().top));
       return +(x * y).toFixed(1); };
-    return { pad: hit('#touchpad'), tutbar: hit('#tutbar'), cue: hit('#hud .bottom'), rect: b.getBoundingClientRect().toJSON() };
+    return { pad: hit('#touchpad'), tutbar: hit('#tutbar'), cue: hit('#hud .bottom'), mute: hit('#btn-mute'), rect: b.getBoundingClientRect().toJSON() };
   })()`);
-  check("live: host badge covers no touch target", !badge || (badge.pad === 0 && badge.tutbar === 0 && badge.cue === 0), badge || "no badge on this host");
+  check("live: host badge covers no touch target", !badge || (badge.pad === 0 && badge.tutbar === 0 && badge.cue === 0 && badge.mute === 0), badge || "no badge on this host");
   check("live: zero page errors", c.errors.length === 0, c.errors);
   await c.shot("31-live-phone-level");
   return c;

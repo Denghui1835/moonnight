@@ -272,9 +272,12 @@ async function keyboardRun(port) {
   // mute toggle via real key
   await c.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true }))`);
   await sleep(150);
-  const muted = await c.eval(`({ muted: __game.audio.muted, master: __game.audio.master ? __game.audio.master.gain.value : null })`);
+  const muted = await c.eval(`({ muted: __game.audio.muted, master: __game.audio.master ? __game.audio.master.gain.value : null, label: document.getElementById('btn-mute').textContent })`);
   await c.eval(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true }))`);
-  check("M toggles mute", muted.muted === true, muted);
+  await sleep(150);
+  const unmuted = await c.eval(`({ muted: __game.audio.muted, label: document.getElementById('btn-mute').textContent })`);
+  // 键盘 M 与屏幕上的静音键必须共享同一个状态，否则手机上看到的状态是假的
+  check("M toggles mute", muted.muted === true && muted.label === "♪ 已静音" && unmuted.muted === false && unmuted.label === "♪ 声音", { muted, unmuted });
 
   // wrong key -> death
   await c.eval(`clearInterval(window.__auto)`);
