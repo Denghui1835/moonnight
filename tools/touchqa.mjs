@@ -363,6 +363,18 @@ async function liveRun(port) {
   check("live: pad is visible and has four keys", await c.eval(`getComputedStyle(document.getElementById('touchpad')).display === 'flex' && document.querySelectorAll('#touchpad button').length === 4`));
   await c.shot("30-live-phone-tutorial");
 
+  // 生产包也暴露 __game（src/main.ts），所以线上冒烟能按判定窗口点，而不是看见箭头就戳。
+  // 盲点在关里会在窗口打开前落下，游戏判死——那是脚本的问题，之前那条 FAIL 就是这么来的。
+  const inWindow = () =>
+    c.eval(`(() => {
+      const g = window.__game;
+      if (!g) return false;
+      if (g.phase === 'tutorial') return g.hud.subtitle === '跟着做。' && !g.judged;
+      if (g.phase !== 'level' || !g.hud.key || g.judged) return false;
+      const l = g.beat - 2 - g.moveIndex * g.plan.beatsPerMove;
+      return l > 0.2 && l < g.plan.beatsPerMove - 0.2;
+    })()`);
+
   const tapUntil = async (target) => {
     const t0 = Date.now();
     let last = null;
@@ -374,7 +386,7 @@ async function liveRun(port) {
           score: Number(document.getElementById('score').textContent) || 0,
           dead: !document.getElementById('result').classList.contains('hidden') };
       })()`);
-      if (st.key) {
+      if (st.key && (await inWindow())) {
         const box = await c.eval(selBox(`#touchpad button[data-key="${st.key}"]`));
         if (box && box.w > 0) {
           await c.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: box.x + box.w / 2, y: box.y + box.h / 2 }] });
