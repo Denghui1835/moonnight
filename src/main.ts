@@ -147,6 +147,11 @@ function syncHud(h: Hud) {
 
 /* ---------------- screens ---------------- */
 
+/** 教学关的跟读也算「跳对」，所以在标签上注明，数字保持干净。 */
+function hitsLabel(id: string, s: Stats) {
+  text(id, s.tutorialHits > 0 && s.hits > s.tutorialHits ? "跳对 · 含教学" : "跳对");
+}
+
 function showDeath(s: Stats) {
   hudHold = true;
   hudEl.classList.add("hidden");
@@ -159,6 +164,7 @@ function showDeath(s: Stats) {
   (document.getElementById("final-line") as HTMLElement).textContent = line;
   text("final-level", `第 ${Math.max(1, s.level)} 关`);
   text("final-hits", String(s.hits));
+  hitsLabel("final-hits-lbl", s);
   text("final-heads", `${s.zombies + 1} 人`);
   resultScreen.classList.remove("hidden");
 }
@@ -169,6 +175,7 @@ function showEnding(s: Stats) {
   (document.getElementById("ending-line") as HTMLElement).textContent =
     "最后一拍，她放下了手。\n镜子空了。队伍的最后，多了一个人。\n第二天，镜子前放着两瓶汽水。";
   text("ending-hits", String(s.hits));
+  hitsLabel("ending-hits-lbl", s);
   text("ending-perfect", String(s.perfects));
   endingScreen.classList.remove("hidden");
 }
@@ -248,7 +255,8 @@ async function startGame(choice: GameMode) {
   btnCam.disabled = false;
   btnKeys.disabled = false;
   note.textContent = mode === "keys" && choice === "camera" ? "摄像头不可用，本次为键盘模式" : "";
-  if (import.meta.env.DEV) (window as unknown as { __game: Game }).__game = game;
+  // E2E 句柄：dev 与生产构建都要有，否则 tools/qa.mjs 只能跑开发服务器（本机 vite dev 的静态文件要 40 s 才下完模型）
+  (window as unknown as { __game: Game }).__game = game;
 }
 
 document.getElementById("btn-cam")!.addEventListener("click", () => void startGame("camera"));

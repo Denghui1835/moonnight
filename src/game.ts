@@ -8,7 +8,7 @@ import type { SceneRenderer } from "./render3d";
 export type GameMode = "camera" | "keys";
 export type Phase = "intro" | "tutorial" | "level" | "levelup" | "dead" | "ending";
 
-export type Stats = { level: number; hits: number; perfects: number; zombies: number };
+export type Stats = { level: number; hits: number; perfects: number; zombies: number; tutorialHits: number };
 
 export type Hud = {
   visible: boolean;
@@ -97,7 +97,7 @@ export class Game {
     tutorial: false,
     cinema: false,
   };
-  readonly stats: Stats = { level: 0, hits: 0, perfects: 0, zombies: 2 };
+  readonly stats: Stats = { level: 0, hits: 0, perfects: 0, zombies: 2, tutorialHits: 0 };
 
   phase: Phase = "intro";
   mode: GameMode;
@@ -200,6 +200,7 @@ export class Game {
     this.stats.level = 0;
     this.stats.hits = 0;
     this.stats.perfects = 0;
+    this.stats.tutorialHits = 0;
     this.stats.zombies = 2;
     this.level = 0;
     this.plan = null;
@@ -444,6 +445,7 @@ export class Game {
           return;
         }
         this.stats.hits++;
+        this.stats.tutorialHits++;
         this.combo++;
         this.hud.subtitle = "对。";
       }

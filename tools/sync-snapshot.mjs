@@ -5,11 +5,14 @@ import { join, relative, extname } from "node:path";
 
 const SRC = process.cwd();
 const DEST = process.argv[2] || "D:\\MoonNight";
-const SKIP_DIRS = ["node_modules", "dist-mirror", "tools/.out/profile-", "tools/.edgecheck"];
+// tools/.out 整个目录都是验收产物（截图、report.json、CDP profile、临时下载的站点副本），
+// 能从 `npm run qa` 重新生成，不进快照
 const SKIP_EXT = new Set([".log"]);
 
 const norm = (p) => p.replaceAll("\\", "/");
-const skipDir = (rel) => SKIP_DIRS.some((d) => (d.endsWith("-") ? rel.startsWith(d) : rel === d || rel.startsWith(d + "/")));
+const BANNED_SEGMENTS = ["node_modules", "dist-mirror", ".edgecheck", ".out", "profile-"];
+// 按路径分段匹配：`tools/.out/mirror2/profile-9333/…` 这种嵌套目录也要拦掉
+const skipDir = (rel) => rel.split("/").some((seg) => BANNED_SEGMENTS.some((d) => (d.endsWith("-") ? seg.startsWith(d) : seg === d)));
 
 async function walk(srcDir, destDir, rel, stats) {
   for (const entry of await readdir(srcDir, { withFileTypes: true })) {
@@ -66,7 +69,7 @@ async function sizeOf(dir) {
 // Remove excluded leftovers (earlier full-tree copies) so the snapshot matches the rule.
 async function prune(dir) {
   const removed = { dirs: [], logs: 0, locked: 0 };
-  for (const name of ["node_modules", "dist-mirror", join("tools", ".edgecheck")]) {
+  for (const name of ["node_modules", "dist-mirror", join("tools", ".out"), join("tools", ".edgecheck")]) {
     const p = join(dir, name);
     try {
       const s = await stat(p);
@@ -79,20 +82,6 @@ async function prune(dir) {
       removed.locked++;
     }
   }
-  const out = join(dir, "tools", ".out");
-  try {
-    for (const name of await readdir(out)) {
-      if (!name.startsWith("profile-")) continue;
-      const p = join(out, name);
-      try {
-        const sub = await sizeOf(p);
-        await rm(p, { recursive: true, force: true });
-        removed.dirs.push(`tools/.out/${name} (${(sub.bytes / 1024 / 1024).toFixed(1)} MB)`);
-      } catch {
-        removed.locked++;
-      }
-    }
-  } catch {}
   async function dropLogs(d) {
     for (const entry of await readdir(d, { withFileTypes: true })) {
       const p = join(d, entry.name);

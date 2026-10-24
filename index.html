@@ -82,10 +82,11 @@
         </p>
         <div class="actions">
           <button id="btn-cam" class="primary">用摄像头跟练</button>
-          <button id="btn-keys" class="ghost">键盘模式（方向键）</button>
+          <button id="btn-keys" class="ghost">键盘模式<span class="only-keys">（方向键）</span><span class="only-touch">（触屏点下面四个键）</span></button>
         </div>
         <p id="loadnote" class="note">摄像头模式需要加载姿势模型，约 3 秒</p>
-        <p class="keys-hint">键盘：方向键 / WASD 跟舞 · M 静音</p>
+        <p class="keys-hint only-keys">键盘：方向键 / WASD 跟舞 · M 静音</p>
+        <p class="keys-hint only-touch">触屏：跟着镜子里的她，点屏幕下方的 ↑ ← ↓ →</p>
       </div>
 
       <div id="result" class="screen hidden">
@@ -95,7 +96,7 @@
           <p id="final-line" class="final-line"></p>
           <div class="stats">
             <div><span>撑到</span><b id="final-level">第 1 关</b></div>
-            <div><span>跳对</span><b id="final-hits">0</b></div>
+            <div><span id="final-hits-lbl">跳对</span><b id="final-hits">0</b></div>
             <div><span>队伍里</span><b id="final-heads">3 人</b></div>
           </div>
           <button id="btn-again" class="primary">再跳一次</button>
@@ -108,7 +109,7 @@
           <h2>谢幕</h2>
           <p id="ending-line" class="final-line"></p>
           <div class="stats">
-            <div><span>跳对</span><b id="ending-hits">0</b></div>
+            <div><span id="ending-hits-lbl">跳对</span><b id="ending-hits">0</b></div>
             <div><span>完美</span><b id="ending-perfect">0</b></div>
           </div>
           <button id="btn-again2" class="primary">再跳一次</button>

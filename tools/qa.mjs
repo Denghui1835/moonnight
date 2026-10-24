@@ -78,6 +78,12 @@ class Cdp {
     await this.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: box.x, y: box.y, button: "left", clickCount: 1 });
     return box;
   }
+  /** 元素不在就返回 false：慢启动应该让检查 FAIL，不该把整轮 QA 带崩。 */
+  async clickIf(sel) {
+    if (!(await this.eval(`!!document.querySelector(${JSON.stringify(sel)})`))) return false;
+    await this.click(sel);
+    return true;
+  }
   async key(key, code, vk) {
     await this.send("Input.dispatchKeyEvent", { type: "keyDown", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
     await this.send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk });
@@ -284,14 +290,16 @@ async function keyboardRun(port) {
     cls: document.getElementById('result').className,
     level: document.getElementById('final-level').textContent,
     hits: document.getElementById('final-hits').textContent,
+    hitsLabel: document.getElementById('final-hits-lbl').textContent,
+    tutorialHits: __game.stats.tutorialHits,
     heads: document.getElementById('final-heads').textContent,
     line: document.getElementById('final-line').textContent,
     againVisible: !document.getElementById('btn-again').disabled
   })`);
   await sleep(700);
-  const resultText2 = resultText;
-  void resultText2;
   check("death screen shows level / hits / headcount", result && resultText.level === "第 1 关" && resultText.heads === "3 人" && Number(resultText.hits) >= 4, resultText);
+  // 第 1 关只有 4 个动作，跳对却更多时，标签必须注明含了教学，否则数字看着像 bug
+  check("death screen flags tutorial hits in the score", resultText.tutorialHits === 4 && resultText.hitsLabel === (Number(resultText.hits) > 4 ? "跳对 · 含教学" : "跳对"), resultText);
   await sleep(600);
   await c.shot("05-result");
 
@@ -353,9 +361,9 @@ async function skipRun(port) {
   await sleep(500);
   await c.click("#btn-keys");
   await c.waitFor(`!!window.__game && __game.phase === 'tutorial'`, 20000);
-  await c.click("#btn-skip");
+  await c.clickIf("#btn-skip");
   await sleep(500);
-  const s = await c.eval(`({ phase: __game.phase, level: __game.level, round: __game.hud.round, bpm: __game.bpm, dots: __game.hud.dots.length })`);
+  const s = await c.eval(`({ phase: window.__game && window.__game.phase, level: window.__game && window.__game.level, round: window.__game && window.__game.hud ? window.__game.hud.round : null, bpm: window.__game && window.__game.bpm, dots: window.__game && window.__game.hud ? window.__game.hud.dots.length : null })`);
   check("skip tutorial jumps straight to level 1", s.phase === "level" && s.level === 1 && s.round === "第 1 关", s);
   check("skip run: zero page errors", c.errors.length === 0, c.errors);
   await closeTarget(c);
@@ -447,10 +455,10 @@ async function cameraLeakRun(port) {
   await c.send("Page.navigate", { url: URL });
   await c.waitFor(`document.readyState === 'complete' && !!document.getElementById('stage')`, 15000);
   await sleep(600);
-  await c.click("#btn-cam");
+  await c.clickIf("#btn-cam");
   const started = await c.waitFor(`!!window.__game`, 30000);
   const state = await c.eval(`({
-    mode: __game && __game.mode,
+    mode: window.__game && window.__game.mode,
     toast: document.getElementById('toast').textContent,
     camHidden: document.getElementById('cam').classList.contains('hidden'),
     srcNull: document.getElementById('cam').srcObject === null,
@@ -475,17 +483,20 @@ async function cameraRun(port) {
   await c.send("Page.navigate", { url: URL });
   await c.waitFor(`document.readyState === 'complete' && !!document.getElementById('stage')`, 15000);
   await sleep(600);
-  await c.click("#btn-cam");
+  await c.clickIf("#btn-cam");
   // 软渲染 + 3D 冷启动下，加载 5.6MB 姿势模型可能很慢；超时只让检查失败，不要让整轮崩掉
   const started = await c.waitFor(`!!window.__game`, 120000);
   await sleep(1500);
   const state = await c.eval(`({
+    started: !!window.__game,
     mode: window.__game && window.__game.mode,
     status: window.__game && window.__game.tracker ? window.__game.tracker.status : null,
     videoHidden: document.getElementById('cam').classList.contains('hidden'),
     trackStates: document.getElementById('cam').srcObject ? document.getElementById('cam').srcObject.getTracks().map((t) => t.readyState) : null,
     videoSize: [document.getElementById('cam').videoWidth, document.getElementById('cam').videoHeight],
-    phase: window.__game && window.__game.phase
+    phase: window.__game && window.__game.phase,
+    toast: document.getElementById('toast').textContent,
+    note: document.getElementById('loadnote').textContent
   })`);
   check("camera mode loads the pose model", started && state.mode === "camera" && state.status === "ready" && state.trackStates && state.trackStates.every((s) => s === "live"), state);
   await c.shot("09-camera");
@@ -493,21 +504,22 @@ async function cameraRun(port) {
   await c.waitFor(`window.__game.phase === 'tutorial'`, 20000);
   // nobody in frame: the tutorial should keep asking, so skip it
   await c.waitFor(`!document.getElementById('tutbar').classList.contains('hidden')`, 5000);
-  const tutWait = await c.eval(`({ sub: window.__game.hud.subtitle, best: +window.__game.best.toFixed(2), sawPose: window.__game.sawPose })`);
-  await c.click("#btn-skip");
+  const G = `window.__game`;
+  const tutWait = await c.eval(`({ sub: ${G} && ${G}.hud ? ${G}.hud.subtitle : null, best: ${G} && ${G}.best != null ? +${G}.best.toFixed(2) : null, sawPose: ${G} && ${G}.sawPose })`);
+  await c.clickIf("#btn-skip");
   await sleep(500);
-  const lv1 = await c.eval(`({ phase: window.__game.phase, level: window.__game.level, sawPose: window.__game.sawPose })`);
-  const advanced = await c.waitFor(`window.__game.level >= 2 || window.__game.phase === 'ending'`, 40000);
-  const lv2 = await c.eval(`({ phase: window.__game.phase, level: window.__game.level, stats: window.__game.stats, results: window.__game.results.slice() })`);
+  const lv1 = await c.eval(`({ phase: ${G} && ${G}.phase, level: ${G} && ${G}.level, sawPose: ${G} && ${G}.sawPose })`);
+  const advanced = await c.waitFor(`${G} && (${G}.level >= 2 || ${G}.phase === 'ending')`, 40000);
+  const lv2 = await c.eval(`({ phase: ${G} && ${G}.phase, level: ${G} && ${G}.level, stats: ${G} && ${G}.stats, results: ${G} && ${G}.results ? ${G}.results.slice() : null })`);
   check("camera levels advance without a detected body (lenient dropouts)", advanced && (lv2.level >= 2 || lv2.phase === "ending"), { tutWait, lv1, lv2 });
-  const camState = await c.eval(`(() => { const v = document.getElementById('cam'); return { hasStream: !!v.srcObject, tracks: v.srcObject ? v.srcObject.getTracks().map((t) => ({ kind: t.kind, state: t.readyState, enabled: t.enabled, muted: t.muted })) : null, status: window.__game.tracker ? window.__game.tracker.status : null, hidden: v.classList.contains('hidden') }; })()`);
+  const camState = await c.eval(`(() => { const v = document.getElementById('cam'); const g = window.__game; return { hasStream: !!v.srcObject, tracks: v.srcObject ? v.srcObject.getTracks().map((t) => ({ kind: t.kind, state: t.readyState, enabled: t.enabled, muted: t.muted })) : null, status: g && g.tracker ? g.tracker.status : null, hidden: v.classList.contains('hidden') }; })()`);
   check("camera run: camera track still live at level 2", camState.tracks && camState.tracks.every((t) => t.state === "live"), camState);
   await c.shot("10-camera-level");
 
   // synthesize an unplug: the app must fall back to keys without freezing
   const unplugged = await c.eval(`(() => { const v = document.getElementById('cam'); const t = v.srcObject && v.srcObject.getVideoTracks()[0]; if (!t) return false; t.dispatchEvent(new Event('ended')); return true; })()`);
   const degraded = await c.waitFor(`window.__game.mode === 'keys' && !window.__game.tracker`, 5000);
-  const lostState = await c.eval(`(() => { const v = document.getElementById('cam'); return { mode: window.__game.mode, tracker: !!window.__game.tracker, videoHidden: v.classList.contains('hidden'), hasStream: !!v.srcObject, cue: document.getElementById('cue-key').textContent, toast: document.getElementById('toast').textContent, phase: window.__game.phase }; })()`);
+  const lostState = await c.eval(`(() => { const v = document.getElementById('cam'); const g = window.__game; return { mode: g && g.mode, tracker: !!(g && g.tracker), videoHidden: v.classList.contains('hidden'), hasStream: !!v.srcObject, cue: document.getElementById('cue-key').textContent, toast: document.getElementById('toast').textContent, phase: g && g.phase }; })()`);
   check("camera track ending mid-run degrades to keyboard", unplugged && degraded && lostState.videoHidden && !lostState.hasStream && lostState.cue !== "", { unplugged, ...lostState });
   check("camera loss toast explains the switch", /键盘/.test(lostState.toast || ""), lostState);
   report.logs.push({ run: "camera", state, tutWait, lv1, lv2, errors: c.errors });

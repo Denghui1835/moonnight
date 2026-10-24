@@ -308,11 +308,30 @@ body {
 
 /* ---------- touch controls ---------- */
 
+/* 标题页按输入方式给一句真正用得上的操作提示：扫码进来的多半是手机。
+   这条必须排在下面的 (hover:none) 之前，同特异度下后者才能覆盖它。 */
+.only-touch {
+  display: none;
+}
+
 .touchpad {
   display: none;
 }
 
 @media (hover: none) and (pointer: coarse) {
+  /* 触屏：换成点按说明，键盘那行收起来。用特异度压过上面的默认隐藏，不用 revert，老内核也认 */
+  .only-keys {
+    display: none;
+  }
+
+  p.keys-hint.only-touch {
+    display: block;
+  }
+
+  button > .only-touch {
+    display: inline;
+  }
+
   .touchpad {
     position: absolute;
     left: 50%;

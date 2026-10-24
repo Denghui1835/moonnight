@@ -148,6 +148,19 @@ async function newTarget(port, mobile) {
 
 const selBox = (sel) => `(() => { const e=document.querySelector(${JSON.stringify(sel)}); if(!e) return null; const b=e.getBoundingClientRect(); return {x:+b.left.toFixed(1), y:+b.top.toFixed(1), w:+b.width.toFixed(1), h:+b.height.toFixed(1), display:getComputedStyle(e).display}; })()`;
 
+// 标题页操作提示：textContent 会把 display:none 的字也带出来，按钮文案只取真正可见的 span
+const HINT_JS = `(() => {
+  const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
+  const btn = document.getElementById('btn-keys');
+  const label = btn.firstChild.textContent.trim() + Array.from(btn.children).filter(vis).map((s) => s.textContent.trim()).join('');
+  return {
+    keys: vis(document.querySelector('.keys-hint.only-keys')),
+    touch: vis(document.querySelector('.keys-hint.only-touch')),
+    btn: label.replace(/\\s+/g, ''),
+    note: vis(document.getElementById('loadnote')),
+  };
+})()`;
+
 async function mobileRun(port) {
   console.log("\n=== phone / touch ===");
   const c = await newTarget(port, true);
@@ -157,6 +170,10 @@ async function mobileRun(port) {
 
   const mq = await c.eval(`({ coarse: matchMedia('(pointer: coarse)').matches, noHover: matchMedia('(hover: none)').matches, vw: innerWidth, vh: innerHeight })`);
   check("phone emulation reports coarse pointer", mq.coarse && mq.noHover, mq);
+  // 标题页的操作提示必须跟着输入方式换：扫码进来的多半是手机，看到「方向键/WASD」等于没提示
+  const hint = await c.eval(HINT_JS);
+  check("phone title shows the touch hint instead of the keyboard one", hint.touch && !hint.keys && /触屏/.test(hint.btn) && !/方向键/.test(hint.btn), hint);
+  check("camera note stays visible on phone", hint.note, hint);
   check("title has no horizontal overflow", await c.eval(`document.documentElement.scrollWidth <= innerWidth + 1`));
   const titleHit = await c.eval(`(() => {
     const r = document.getElementById('touchpad').getBoundingClientRect();
@@ -293,11 +310,13 @@ async function desktopRun(port) {
   await sleep(1000);
   const pad = await c.eval(selBox("#touchpad"));
   check("pad stays hidden on desktop", !pad || pad.display === "none", pad);
+  const dHint = await c.eval(HINT_JS);
+  check("desktop title keeps the keyboard hint", dHint.keys && !dHint.touch && /方向键/.test(dHint.btn) && !/触屏/.test(dHint.btn), dHint);
   check("desktop has no horizontal overflow", await c.eval(`document.documentElement.scrollWidth <= innerWidth + 1`));
   return c;
 }
 
-// Production builds do not expose __game; this run proves the live bundle by DOM only.
+// The live bundle is verified through the DOM (plus the __game handle main.ts now exposes in prod builds).
 async function liveRun(port) {
   console.log("\n=== live site (DOM only) ===");
   const c = await newTarget(port, true);
@@ -305,6 +324,8 @@ async function liveRun(port) {
   const loaded = await c.waitFor(`document.readyState === 'complete' && !!document.getElementById('btn-keys')`, 30000);
   check("live title loads", loaded);
   await sleep(1200);
+  const lHint = await c.eval(HINT_JS);
+  check("live phone title shows the touch hint", lHint.touch && !lHint.keys && /触屏/.test(lHint.btn) && !/方向键/.test(lHint.btn), lHint);
   check("live: pad hidden on the title", await c.eval(`document.getElementById('hud').classList.contains('hidden') && getComputedStyle(document.getElementById('hud')).opacity === '0'`));
 
   await c.click("#btn-keys");
