@@ -8,10 +8,12 @@ const DEST = process.argv[2] || "D:\\MoonNight";
 // tools/.out 整个目录都是验收产物（截图、report.json、CDP profile、临时下载的站点副本），
 // 能从 `npm run qa` 重新生成，不进快照
 const SKIP_EXT = new Set([".log"]);
+const ASSETS = "dist/assets";
 
 const norm = (p) => p.replaceAll("\\", "/");
-const BANNED_SEGMENTS = ["node_modules", "dist-mirror", ".edgecheck", ".out", "profile-"];
+const BANNED_SEGMENTS = ["node_modules", "dist-mirror", ".edgecheck", ".out", "profile-", ".git"];
 // 按路径分段匹配：`tools/.out/mirror2/profile-9333/…` 这种嵌套目录也要拦掉
+// `.git` 也要拦：曾经有一次发 gh-pages 直接在 dist/ 里 git init，22 MB 仓库对象跟着产物进了快照
 const skipDir = (rel) => rel.split("/").some((seg) => BANNED_SEGMENTS.some((d) => (d.endsWith("-") ? seg.startsWith(d) : seg === d)));
 
 async function walk(srcDir, destDir, rel, stats) {
@@ -85,8 +87,20 @@ async function prune(dir) {
   async function dropLogs(d) {
     for (const entry of await readdir(d, { withFileTypes: true })) {
       const p = join(d, entry.name);
-      if (entry.isDirectory()) await dropLogs(p);
-      else if (entry.isFile() && entry.name.endsWith(".log")) {
+      if (entry.isDirectory()) {
+        // 早年的整树拷贝里可能藏着 .git（dist/.git 那种）或 CDP 的 profile-*，递归扫掉
+        if (BANNED_SEGMENTS.includes(entry.name) || entry.name.startsWith("profile-")) {
+          try {
+            const sub = await sizeOf(p);
+            await rm(p, { recursive: true, force: true });
+            removed.dirs.push(`${norm(relative(DEST, p))} (${(sub.bytes / 1024 / 1024).toFixed(1)} MB)`);
+          } catch {
+            removed.locked++;
+          }
+          continue;
+        }
+        await dropLogs(p);
+      } else if (entry.isFile() && entry.name.endsWith(".log")) {
         try {
           await rm(p, { force: true });
           removed.logs++;
@@ -100,11 +114,36 @@ async function prune(dir) {
   return removed;
 }
 
+// 快照是增量拷贝，hash 文件名每轮都换，旧包会一直堆在 dist/assets 里。
+// 只留当前 index.html 真正引用的那批。
+async function pruneStaleBundles() {
+  let removed = 0;
+  let bytes = 0;
+  try {
+    const keep = new Set(await readdir(join(SRC, ASSETS)));
+    for (const name of await readdir(join(DEST, ASSETS))) {
+      if (keep.has(name)) continue;
+      const p = join(DEST, ASSETS, name);
+      const s = await stat(p);
+      if (s.isFile()) {
+        bytes += s.size;
+        await rm(p, { force: true });
+        removed++;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return { removed, bytes };
+}
+
 const stats = { copied: 0, skipped: 0, bytes: 0 };
 await walk(SRC, DEST, "", stats);
 const removed = await prune(DEST);
+const stale = await pruneStaleBundles();
 const total = await sizeOf(DEST);
 const mb = (n) => (n / 1024 / 1024).toFixed(1);
 console.log(`copied ${stats.copied} files (${mb(stats.bytes)} MB), skipped ${stats.skipped} unchanged`);
 console.log(`pruned: ${removed.dirs.join(", ") || "nothing"}; ${removed.logs} *.log removed${removed.locked ? `, ${removed.locked} locked` : ""}`);
+if (stale) console.log(`pruned: ${stale.removed} superseded bundles in ${ASSETS} (${mb(stale.bytes)} MB)`);
 console.log(`snapshot ${norm(DEST)}: ${mb(total.bytes)} MB, ${total.files} files`);
