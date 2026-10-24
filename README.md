@@ -13,11 +13,12 @@
 
 | 入口 | 链接 |
 |---|---|
-| **国内镜像（推荐，大陆直连）** | <https://moonnight-mirror-rvzkngbzcr9.qoder.website/> |
+| **国内镜像 A（推荐，大陆直连）** | <https://moonnight-c1n29gwia6s.qoder.zone/> |
+| **国内镜像 B（备用）** | <https://moonnight-mirror-rvzkngbzcr9.qoder.website/> |
 | **GitHub Pages（主站）** | <https://denghui1835.github.io/moonnight/> |
-| 配乐试听 | [GitHub Pages](https://denghui1835.github.io/moonnight/music/moonnight-metal.mp3) · [镜像](https://moonnight-mirror-rvzkngbzcr9.qoder.website/music/moonnight-metal.mp3) |
+| 配乐试听 | [GitHub Pages](https://denghui1835.github.io/moonnight/music/moonnight-metal.mp3) · [镜像 A](https://moonnight-c1n29gwia6s.qoder.zone/music/moonnight-metal.mp3) |
 
-- 两个入口是同一份构建，内容一致；GitHub Pages 在国内部分网络/代理下会打不开，优先用镜像。
+- 三个入口是同一份代码的两个构建（Pages 用 `/moonnight/` 前缀，镜像用根路径），玩法完全一致；GitHub Pages 在国内部分网络/代理下会打不开，优先用镜像。两个镜像域名分属两套 Qoder 账号凭证，每次重新构建后都要各发一次；本轮核对过三个入口首页引用的都是 `index-DKMki3oD.js` + `index-D_LXfvHZ.css`，与本地 `dist` 一致。
 - 手机扫码（左：镜像，右：GitHub Pages）：
 
   <img src="docs/screenshots/qr-moonnight-mirror.png" alt="镜像二维码" width="180"> <img src="docs/screenshots/qr-moonnight-pages.png" alt="GitHub Pages 二维码" width="180">

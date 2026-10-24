@@ -7,7 +7,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "docs", "screenshots");
 
 const targets = {
-  "qr-moonnight-mirror.png": process.env.QA_MIRROR_URL || "https://moonnight-mirror-rvzkngbzcr9.qoder.website/",
+  "qr-moonnight-mirror.png": process.env.QA_MIRROR_URL || "https://moonnight-c1n29gwia6s.qoder.zone/",
   "qr-moonnight-pages.png": "https://denghui1835.github.io/moonnight/",
 };
 
