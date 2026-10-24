@@ -301,8 +301,14 @@ async function keyboardRun(port) {
   })`);
   await sleep(700);
   check("death screen shows level / hits / headcount", result && resultText.level === "第 1 关" && resultText.heads === "3 人" && Number(resultText.hits) >= 4, resultText);
-  // 第 1 关只有 4 个动作，跳对却更多时，标签必须注明含了教学，否则数字看着像 bug
-  check("death screen flags tutorial hits in the score", resultText.tutorialHits === 4 && resultText.hitsLabel === (Number(resultText.hits) > 4 ? "跳对 · 含教学" : "跳对"), resultText);
+  // 「跳对」里混着教学的 4 个，标签必须和数字说同一个故事（这一路自动点按在关里也跳对过，所以是「含教学」）
+  const allTutorial = "跳对 · 全是教学";
+  const someTutorial = "跳对 · 含教学";
+  const labelOk =
+    resultText.tutorialHits === 4 &&
+    Number(resultText.hits) >= resultText.tutorialHits &&
+    resultText.hitsLabel === (Number(resultText.hits) > resultText.tutorialHits ? someTutorial : allTutorial);
+  check("death screen label matches the tutorial part of the score", labelOk, resultText);
   await sleep(600);
   await c.shot("05-result");
 
@@ -353,6 +359,47 @@ async function keyboardRun(port) {
 
   check("keyboard run: zero page errors", c.errors.length === 0, c.errors);
   report.logs.push({ run: "keyboard", entries: log.length, errors: c.errors });
+  await closeTarget(c);
+}
+
+/**
+ * 结算页另一条分支：跳完教学、第 1 关第一个动作就按错。
+ * 这时「跳对」= 4 全是教学计数，标签必须写「全是教学」，否则数字看着像 bug。
+ * 教学阶段的自动点按进关后立刻停手，hits 才会刚好停在教学计数上。
+ */
+async function allTutorialDeathRun(port) {
+  console.log("\n=== death on the first level move ===");
+  const c = await newTarget(port);
+  await c.send("Page.navigate", { url: URL });
+  await c.waitFor(`document.readyState === 'complete' && !!document.getElementById('btn-keys')`, 15000);
+  await sleep(600);
+  await c.click("#btn-keys");
+  await c.waitFor(`!!window.__game && __game.phase === 'tutorial'`, 20000);
+  await c.eval(`window.__tutOnly = setInterval(() => {
+    const g = window.__game;
+    if (!g || g.phase !== 'tutorial' || g.hud.subtitle !== '跟着做。' || g.judged) return;
+    const M = { '↑': 'ArrowUp', '↓': 'ArrowDown', '←': 'ArrowLeft', '→': 'ArrowRight' };
+    g.pushKey(M[g.hud.key] || g.hud.key);
+  }, 45); true`);
+  const reached = await c.waitFor(`__game.phase === 'level'`, 60000);
+  await c.eval(`clearInterval(window.__tutOnly)`);
+  const atLevel = await c.eval(`({ hits: __game.stats.hits, tutorialHits: __game.stats.tutorialHits })`);
+  check("tutorial-only tapping enters level 1 with nothing scored yet", reached && atLevel.hits === atLevel.tutorialHits && atLevel.hits === 4, atLevel);
+  const ready = await c.waitFor(`__game.phase === 'level' && __game.moveIndex >= 0 && !!__game.hud.key && !__game.judged && (__game.beat - 2 - __game.moveIndex * __game.plan.beatsPerMove) > 0.2`, 12000);
+  const wrong = await c.eval(`(() => { const k = __game.hud.key; const M = { '↑': 'ArrowUp', '↓': 'ArrowDown', '←': 'ArrowLeft', '→': 'ArrowRight' }; const w = ['↑','↓','←','→'].find((x) => x !== k); return { label: w, raw: M[w] }; })()`);
+  await c.eval(`__game.pushKey(${JSON.stringify(wrong.raw)})`);
+  const died = await c.waitFor(`__game.phase === 'dead'`, 3000);
+  const shown = await c.waitFor(`!document.getElementById('result').classList.contains('hidden')`, 6000);
+  const r = await c.eval(`({
+    hits: document.getElementById('final-hits').textContent,
+    lbl: document.getElementById('final-hits-lbl').textContent,
+    level: document.getElementById('final-level').textContent,
+    heads: document.getElementById('final-heads').textContent,
+    tut: __game.stats.tutorialHits
+  })`);
+  check("score made only of tutorial hits is labelled 全是教学", died && shown && ready && r.hits === "4" && r.tut === 4 && r.lbl === "跳对 · 全是教学" && r.level === "第 1 关", { wrong, ...r });
+  await c.shot("11-death-all-tutorial");
+  check("all-tutorial death run: zero page errors", c.errors.length === 0, c.errors);
   await closeTarget(c);
 }
 
@@ -541,6 +588,7 @@ try {
   procs.push(p1);
   const probe = new Cdp((await (await fetch(`http://127.0.0.1:${P1}/json/list`)).json())[0].webSocketDebuggerUrl);
   await keyboardRun(P1);
+  await allTutorialDeathRun(P1);
   await skipRun(P1);
   await stage3dRun(P1);
   await cameraLeakRun(P1);

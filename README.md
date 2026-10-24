@@ -92,8 +92,8 @@ npm install
 npm run dev      # http://localhost:5173
 npm run build    # 产出 dist/
 npm run preview  # 预览生产构建
-npm run qa       # 桌面 E2E（44 项，含 9 项 3D 回退/帧率；建议 QA_URL 指向 npm run build + vite preview 的生产构建）
-npm run touchqa  # 手机触控 E2E（28 项，375×812 设备模拟；QA_LIVE=1 走线上 DOM 冒烟）
+npm run qa       # 桌面 E2E（47 项，含 9 项 3D 回退/帧率；建议 QA_URL 指向 npm run build + vite preview 的生产构建）
+npm run touchqa  # 手机触控 E2E（29 项，375×812 设备模拟；QA_LIVE=1 走线上 DOM 冒烟）
 npm run mirror   # dist -> dist-mirror（国内镜像用的根路径版）
 npm run qr       # 重新生成试玩二维码
 npm run snapshot # 增量同步快照到 D:\MoonNight（排除依赖与验收临时目录）

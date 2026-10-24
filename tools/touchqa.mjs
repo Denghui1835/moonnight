@@ -317,12 +317,17 @@ async function mobileRun(port) {
     return { shown: !r.classList.contains('hidden'),
       line: document.getElementById('final-line').textContent,
       level: document.getElementById('final-level').textContent,
+      hits: document.getElementById('final-hits').textContent,
+      hitsLabel: document.getElementById('final-hits-lbl').textContent,
+      tutorialHits: __game.stats.tutorialHits,
       again: { x: +rb.left.toFixed(1), y: +rb.top.toFixed(1), w: +rb.width.toFixed(1), h: +rb.height.toFixed(1) },
       inView: rb.top >= 0 && rb.bottom <= innerHeight + 0.5,
       overflow: document.documentElement.scrollWidth <= innerWidth + 1 };
   })()`);
   check("wrong tap kills the run on phone", nextWin && dead && resultShown && result.again.w >= 44, { curKey, wrongKey, nextWin, dead, result });
   check("phone result screen fits and restart is reachable", result.shown && result.overflow && result.inView && result.again.h >= 44, result);
+  // 这一路在关里至少跳对一个，所以「跳对」比教学计数大，标签必须注明含教学
+  check("phone death screen flags tutorial hits", Number(result.hits) > result.tutorialHits && result.tutorialHits === 4 && result.hitsLabel === "跳对 · 含教学", result);
   await c.shot("23-phone-death");
 
   await c.click("#btn-again");

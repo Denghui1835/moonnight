@@ -157,7 +157,9 @@ function syncHud(h: Hud) {
 
 /** 教学关的跟读也算「跳对」，所以在标签上注明，数字保持干净。 */
 function hitsLabel(id: string, s: Stats) {
-  text(id, s.tutorialHits > 0 && s.hits > s.tutorialHits ? "跳对 · 含教学" : "跳对");
+  // 只在教学计入时挂「含教学」会在 hits === tutorialHits 时漏掉：
+  // 跳完教学、第 1 关第一个动作就错死掉，屏幕上那个 4 全是教学，标成普通「跳对」看着像 bug
+  text(id, s.tutorialHits === 0 ? "跳对" : s.hits > s.tutorialHits ? "跳对 · 含教学" : "跳对 · 全是教学");
 }
 
 function showDeath(s: Stats) {
