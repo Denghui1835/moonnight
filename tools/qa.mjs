@@ -428,6 +428,13 @@ async function cameraRun(port) {
   const camState = await c.eval(`(() => { const v = document.getElementById('cam'); return { hasStream: !!v.srcObject, tracks: v.srcObject ? v.srcObject.getTracks().map((t) => ({ kind: t.kind, state: t.readyState, enabled: t.enabled, muted: t.muted })) : null, status: __game.tracker ? __game.tracker.status : null, hidden: v.classList.contains('hidden') }; })()`);
   check("camera run: camera track still live at level 2", camState.tracks && camState.tracks.every((t) => t.state === "live"), camState);
   await c.shot("10-camera-level");
+
+  // synthesize an unplug: the app must fall back to keys without freezing
+  await c.eval(`document.getElementById('cam').srcObject.getVideoTracks()[0].dispatchEvent(new Event('ended')); true`);
+  const degraded = await c.waitFor(`__game.mode === 'keys' && !__game.tracker`, 5000);
+  const lostState = await c.eval(`(() => { const v = document.getElementById('cam'); return { mode: __game.mode, tracker: !!__game.tracker, videoHidden: v.classList.contains('hidden'), hasStream: !!v.srcObject, cue: document.getElementById('cue-key').textContent, toast: document.getElementById('toast').textContent, phase: __game.phase }; })()`);
+  check("camera track ending mid-run degrades to keyboard", degraded && lostState.videoHidden && !lostState.hasStream && lostState.cue !== "", lostState);
+  check("camera loss toast explains the switch", /键盘/.test(lostState.toast || ""), lostState);
   report.logs.push({ run: "camera", state, tutWait, lv1, lv2, errors: c.errors });
   const realErrors = c.errors.filter((e) => !e.includes("Failed to fetch") && !e.includes("net::"));
   check("camera run: no unexpected page errors", realErrors.length === 0, realErrors);
@@ -444,7 +451,7 @@ try {
   await cameraLeakRun(9333);
   await probe.send("Browser.close").catch(() => {});
 
-  const p2 = await boot(9334, ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"]);
+  const p2 = await boot(9334, ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--disable-gpu"]);
   procs.push(p2);
   await cameraRun(9334);
 } catch (e) {

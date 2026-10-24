@@ -3,6 +3,7 @@ import { PoseTracker } from "./pose";
 import { blendParams, buildPose, easeInOut, matchScore, MoveParams, Pose } from "./rig";
 import { BASE, levelPlan, LevelPlan, MAX_LEVEL, MOVES, TUTORIAL } from "./moves";
 import { Figure, place, renderScene, Scene } from "./stage";
+import type { SceneRenderer } from "./render3d";
 
 export type GameMode = "camera" | "keys";
 export type Phase = "intro" | "tutorial" | "level" | "levelup" | "dead" | "ending";
@@ -21,12 +22,15 @@ export type Hud = {
   subtitle: string;
   meter: number;
   tutorial: boolean;
+  /** 结局/死亡时收起计分板，只留叙事字幕 */
+  cinema: boolean;
 };
 
 export type GameDeps = {
   audio: AudioEngine;
   tracker: PoseTracker | null;
   mode: GameMode;
+  renderer?: SceneRenderer | null;
   onDeath: (s: Stats) => void;
   onEnding: (s: Stats) => void;
 };
@@ -91,14 +95,16 @@ export class Game {
     subtitle: "",
     meter: 0,
     tutorial: false,
+    cinema: false,
   };
   readonly stats: Stats = { level: 0, hits: 0, perfects: 0, zombies: 2 };
 
   phase: Phase = "intro";
-  readonly mode: GameMode;
+  mode: GameMode;
 
   private audio: AudioEngine;
   private tracker: PoseTracker | null;
+  private renderer: SceneRenderer | null;
   private onDeath: (s: Stats) => void;
   private onEnding: (s: Stats) => void;
 
@@ -161,6 +167,7 @@ export class Game {
   constructor(deps: GameDeps) {
     this.audio = deps.audio;
     this.tracker = deps.tracker;
+    this.renderer = deps.renderer ?? null;
     this.mode = deps.mode;
     this.onDeath = deps.onDeath;
     this.onEnding = deps.onEnding;
@@ -267,6 +274,17 @@ export class Game {
   skipTutorial(): void {
     if (this.phase !== "tutorial") return;
     this.startLevel(1);
+  }
+
+  /** 摄像头中途断开：保住当前这一拍，之后改用键盘 / 触屏。 */
+  degradeToKeys(): void {
+    if (this.mode === "keys") return;
+    this.mode = "keys";
+    this.tracker = null;
+    if ((this.phase === "tutorial" || this.phase === "level") && !this.judged) {
+      this.judged = true;
+      this.best = Math.max(this.best, PASS);
+    }
   }
 
   /* ---------------- tick ---------------- */
@@ -687,6 +705,7 @@ export class Game {
     this.hud.hits = this.stats.hits;
     this.hud.visible = this.phase !== "intro";
     this.hud.tutorial = this.phase === "tutorial";
+    this.hud.cinema = this.phase === "ending" || this.phase === "dead";
     if (this.phase === "level" || this.phase === "levelup") {
       this.hud.dots = this.results.map((r, i) => (this.phase === "level" && i === this.moveIndex ? "now" : r));
     }
@@ -695,7 +714,9 @@ export class Game {
   /* ---------------- render ---------------- */
 
   render(ctx: CanvasRenderingContext2D): void {
-    renderScene(ctx, this.w, this.h, this.scene());
+    const scene = this.scene();
+    if (this.renderer) this.renderer.render(scene, this.w, this.h);
+    else renderScene(ctx, this.w, this.h, scene);
   }
 
   private scene(): Scene {
@@ -746,6 +767,8 @@ export class Game {
       intro: this.phase === "intro" ? Math.min(1, this.phaseT / 4.6) : 1,
       lunge: this.lunge,
       blood: this.blood,
+      ending: this.phase === "ending" ? this.endingT : 0,
+      level: this.level,
     };
   }
 

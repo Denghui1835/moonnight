@@ -32,12 +32,22 @@ function smoothPose(prev: Pose | null, next: Pose, t: number): Pose {
 export class PoseTracker {
   status: TrackerStatus = "idle";
   errorMessage = "";
+  onLost: (() => void) | null = null;
 
   private landmarker: PoseLandmarker | null = null;
+  private stream: MediaStream | null = null;
+  private track: MediaStreamTrack | null = null;
+  private lostNotified = false;
   private video: HTMLVideoElement;
   private lastVideoTime = -1;
   private smoothed: Pose | null = null;
   private lastDetect = 0;
+
+  private readonly handleTrackEnded = (): void => {
+    if (this.lostNotified) return;
+    this.lostNotified = true;
+    this.onLost?.();
+  };
 
   constructor(video: HTMLVideoElement) {
     this.video = video;
@@ -51,6 +61,13 @@ export class PoseTracker {
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
         audio: false,
       });
+      // 只靠 video.srcObject 引用时，MediaStream 可能被 GC，轨道会自行 ended；
+      // 由 tracker 持有一份强引用，保证整局摄像头存活。
+      this.stream = stream;
+      const track = stream.getVideoTracks()[0] ?? null;
+      this.track = track;
+      this.lostNotified = false;
+      track?.addEventListener("ended", this.handleTrackEnded);
       this.video.srcObject = stream;
       await this.video.play();
     } catch (e) {
@@ -80,8 +97,12 @@ export class PoseTracker {
   }
 
   stop() {
-    const stream = this.video.srcObject as MediaStream | null;
+    this.track?.removeEventListener("ended", this.handleTrackEnded);
+    this.track = null;
+    this.lostNotified = false;
+    const stream = this.stream ?? (this.video.srcObject as MediaStream | null);
     stream?.getTracks().forEach((t) => t.stop());
+    this.stream = null;
     this.video.srcObject = null;
     this.landmarker?.close();
     this.landmarker = null;

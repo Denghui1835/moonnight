@@ -37,6 +37,10 @@ export type Scene = {
   lunge: number;
   /** 0..1, crimson wash on death */
   blood: number;
+  /** ending elapsed seconds, 0 while still dancing */
+  ending?: number;
+  /** story props unlock by level */
+  level?: number;
 };
 
 const BODY = "#000000";

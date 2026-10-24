@@ -4,9 +4,11 @@ import { Game, GameMode, Hud, Stats } from "./game";
 import { MOVES } from "./moves";
 import { PoseTracker } from "./pose";
 import { buildPose } from "./rig";
+import { createStage3D, SceneRenderer } from "./render3d";
 import { place, renderScene, Scene } from "./stage";
 
 const canvas = document.getElementById("stage") as HTMLCanvasElement;
+const canvas3d = document.getElementById("stage3d") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
 const video = document.getElementById("cam") as HTMLVideoElement;
 const hudEl = document.getElementById("hud") as HTMLElement;
@@ -21,6 +23,7 @@ const endingScreen = document.getElementById("ending") as HTMLElement;
 const audio = new AudioEngine();
 let game: Game | null = null;
 let mode: GameMode = "keys";
+let stage3d: SceneRenderer | null = null;
 let W = 0;
 let H = 0;
 
@@ -33,9 +36,18 @@ function resize() {
   canvas.style.width = W + "px";
   canvas.style.height = H + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  stage3d?.resize(W, H);
 }
 window.addEventListener("resize", resize);
 resize();
+
+stage3d = createStage3D(canvas3d, W, H);
+if (stage3d) {
+  canvas3d.style.display = "block";
+  canvas.classList.add("offscreen");
+} else {
+  canvas3d.style.display = "none";
+}
 
 /* ---------------- title backdrop ---------------- */
 
@@ -43,7 +55,7 @@ function idleScene(t: number): Scene {
   return {
     time: t,
     beatPhase: (t * 0.4) % 1,
-    instructor: place(buildPose(MOVES.stand.params), W * 0.5, H * 0.93, Math.min(H * 0.62, W * 0.58), {
+    instructor: place(buildPose(MOVES.stand.params), W * 0.72, H * 0.93, Math.min(H * 0.62, W * 0.58), {
       reflection: true,
     }),
     zombies: [],
@@ -86,6 +98,7 @@ function toast(msg: string) {
 function syncHud(h: Hud) {
   toggle(hudEl, "hidden", !h.visible || hudHold);
   toggle(hudEl, "tutorial-on", h.tutorial);
+  toggle(hudEl, "cinema", h.cinema);
   toggle(tutbar, "hidden", !h.tutorial);
   text("round", h.round);
   text("score", String(h.hits));
@@ -163,15 +176,29 @@ async function startGame(choice: GameMode) {
   }
 
   let tracker: PoseTracker | null = null;
+  let cameraLost = false;
   mode = choice;
   if (choice === "camera") {
-    tracker = new PoseTracker(video);
+    const t = new PoseTracker(video);
+    tracker = t;
+    t.onLost = () => {
+      cameraLost = true;
+      if (!game) return;
+      // 摄像头中途断开（拔掉、权限被收回、GPU 重置）：停止轨道并改走键盘 / 触屏
+      t.stop();
+      if (tracker === t) tracker = null;
+      mode = "keys";
+      video.classList.add("hidden");
+      game.degradeToKeys();
+      toast("摄像头断开了，已切到键盘模式");
+    };
     try {
-      await tracker.start();
+      await t.start();
+      if (cameraLost) throw new Error("camera lost");
       video.classList.remove("hidden");
     } catch {
       // 模型加载失败时摄像头可能已经点亮，必须显式关闭轨道
-      tracker.stop();
+      t.stop();
       tracker = null;
       mode = "keys";
       video.classList.add("hidden");
@@ -191,9 +218,18 @@ async function startGame(choice: GameMode) {
     audio,
     tracker,
     mode,
+    renderer: stage3d,
     onDeath: showDeath,
     onEnding: showEnding,
   });
+  if (cameraLost && mode === "camera") {
+    mode = "keys";
+    tracker?.stop();
+    tracker = null;
+    video.classList.add("hidden");
+    game.degradeToKeys();
+    toast("摄像头断开了，已切到键盘模式");
+  }
   game.begin();
   btnCam.disabled = false;
   btnKeys.disabled = false;
@@ -272,7 +308,9 @@ function frame(ms: number) {
     game.render(ctx);
     syncHud(game.hud);
   } else {
-    renderScene(ctx, W, H, idleScene(now));
+    const scene = idleScene(now);
+    if (stage3d) stage3d.render(scene, W, H);
+    else renderScene(ctx, W, H, scene);
   }
   requestAnimationFrame(frame);
 }

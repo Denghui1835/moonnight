@@ -30,12 +30,21 @@ body {
   overflow: hidden;
 }
 
-#stage {
+#stage,
+#stage3d {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   display: block;
+}
+
+#stage3d {
+  background: #05080a;
+}
+
+#stage.offscreen {
+  display: none;
 }
 
 .vignette {
@@ -107,6 +116,11 @@ body {
   opacity: 0;
 }
 
+/* the pad opts back into pointer events, so switch it off with the HUD */
+#hud.hidden .touchpad {
+  pointer-events: none;
+}
+
 .hud-top {
   position: absolute;
   top: 26px;
@@ -117,6 +131,14 @@ body {
   justify-content: space-between;
   padding: 0 34px;
   font-variant-numeric: tabular-nums;
+  transition: opacity 0.8s ease;
+}
+
+#hud.cinema .hud-top,
+#hud.cinema .meter,
+#hud.cinema .touchpad {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .hud-left,
@@ -348,6 +370,30 @@ body {
 
   #hud.tutorial-on .tutorial-bar {
     bottom: 92px;
+  }
+
+  /* Qoder Sites 在右下角注入固定徽标（147×32）；把舞蹈板和相关文字整体抬开，
+     避免右侧键被压住。徽标自带 safe-area，偏移量跟随它的底距。 */
+  html:has(#qoder-sites-watermark) .touchpad {
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 48px);
+  }
+
+  html:has(#qoder-sites-watermark) #hud .bottom {
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 126px);
+  }
+
+  html:has(#qoder-sites-watermark) #hud.tutorial-on .bottom {
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 182px);
+  }
+
+  html:has(#qoder-sites-watermark) #hud.tutorial-on .tutorial-bar {
+    bottom: calc(max(14px, env(safe-area-inset-bottom)) + 126px);
+  }
+
+  /* keep every touch target at least 44px tall */
+  .screen button,
+  .tutorial-bar button {
+    min-height: 44px;
   }
 }
 

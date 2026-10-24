@@ -11,10 +11,20 @@
 
 ## 在线试玩
 
-- **GitHub Pages**：<https://denghui1835.github.io/moonnight/>
-- **配乐试听**：[moonnight-metal.mp3](https://denghui1835.github.io/moonnight/music/moonnight-metal.mp3)
+| 入口 | 链接 |
+|---|---|
+| **国内镜像（推荐，大陆直连）** | <https://moonnight-c1n29gwia6s.qoder.zone/> |
+| **GitHub Pages（主站）** | <https://denghui1835.github.io/moonnight/> |
+| 配乐试听 | [GitHub Pages](https://denghui1835.github.io/moonnight/music/moonnight-metal.mp3) · [镜像](https://moonnight-c1n29gwia6s.qoder.zone/music/moonnight-metal.mp3) |
+
+- 两个入口是同一份构建，内容一致；GitHub Pages 在国内部分网络/代理下会打不开，优先用镜像。
+- 手机扫码（左：镜像，右：GitHub Pages）：
+
+  <img src="docs/screenshots/qr-moonnight-mirror.png" alt="镜像二维码" width="180"> <img src="docs/screenshots/qr-moonnight-pages.png" alt="GitHub Pages 二维码" width="180">
+
 - 推荐桌面浏览器（Chrome / Edge）。摄像头模式需要授权；不方便开摄像头就选键盘模式，难度完全一致。
 - 第一次进入摄像头模式会加载本地姿势模型（约 5.6 MB），之后走缓存。
+- 本地兜底：`npm install` 后 `npm run dev`（<http://localhost:5173/>）；或 `npm run build && npm run preview`（<http://localhost:4173/moonnight/>）。Vite 的 base 是 `/moonnight/`，不要直接双击打开 `dist/index.html`。
 
 ## 这是什么
 
@@ -64,7 +74,7 @@
 | 模块 | 选型 |
 |---|---|
 | 构建 | Vite + TypeScript（strict） |
-| 渲染 | Canvas 2D：程序化剪影、镜面反射、雾、月光、乌鸦；零图片素材 |
+| 渲染 | Three.js r170 实时 3D：程序化人偶、真实镜面反射、Bloom、体积光、菲涅尔轮廓光；WebGL 不可用时自动退回 Canvas 2D 剪影 |
 | 体感 | MediaPipe PoseLandmarker (lite)，wasm 与模型全量本地化，不依赖外网 |
 | 判定 | 10 个加权姿态特征；键盘模式共用同一套节拍窗口 |
 | 音频 | Web Audio 实时合成，25ms 调度 / 120ms 前瞻；音频时钟带单调回退与恢复重锚 |
@@ -81,7 +91,7 @@ npm run dev      # http://localhost:5173
 npm run build    # 产出 dist/
 npm run preview  # 预览生产构建
 npm run qa       # 桌面 E2E（32 项，需先启动 npm run dev）
-npm run touchqa  # 手机触控 E2E（17 项，375×812 设备模拟）
+npm run touchqa  # 手机触控 E2E（21 项，375×812 设备模拟）
 ```
 
 ## 目录
@@ -90,7 +100,8 @@ npm run touchqa  # 手机触控 E2E（17 项，375×812 设备模拟）
 src/
   main.ts        入口、界面切换、输入、HUD
   game.ts        游戏状态机、关卡、判定、僵尸循环
-  stage.ts       镜厅场景与剪影渲染
+  render3d.ts    Three.js 镜厅：人偶、镜面、体积光、后期
+  stage.ts       Canvas 2D 兜底场景与剪影渲染
   rig.ts         正向运动学骨架与姿态匹配
   moves.ts       动作库与关卡编排
   pose.ts        MediaPipe 体感
@@ -109,7 +120,7 @@ docs/
   screenshots/   截图
 tools/
   qa.mjs         CDP 桌面 E2E 测试（32 项）
-  touchqa.mjs    CDP 手机触控 E2E 测试（17 项）
+  touchqa.mjs    CDP 手机触控 E2E 测试（21 项）
 ```
 
 ## 设计文档

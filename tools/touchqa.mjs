@@ -140,6 +140,12 @@ async function mobileRun(port) {
   const mq = await c.eval(`({ coarse: matchMedia('(pointer: coarse)').matches, noHover: matchMedia('(hover: none)').matches, vw: innerWidth, vh: innerHeight })`);
   check("phone emulation reports coarse pointer", mq.coarse && mq.noHover, mq);
   check("title has no horizontal overflow", await c.eval(`document.documentElement.scrollWidth <= innerWidth + 1`));
+  const titleHit = await c.eval(`(() => {
+    const r = document.getElementById('touchpad').getBoundingClientRect();
+    const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return { tag: el ? el.id || el.className : null, pad: !!(el && el.closest && el.closest('#touchpad')) };
+  })()`);
+  check("hidden pad does not intercept taps on the title", titleHit.pad === false, titleHit);
   await c.shot("20-phone-title");
 
   await c.click("#btn-keys");
@@ -198,19 +204,66 @@ async function mobileRun(port) {
   const hudBottom = await c.eval(selBox("#hud .bottom"));
   check("pad still visible in level and clear of HUD", padLvl.display === "flex" && noOverlap(padLvl, hudBottom), { padLvl, hudBottom });
 
-  // level tap
-  const lvlReady = await c.waitFor(`__game.phase === 'level' && !!__game.hud.key && !__game.judged && (() => { const l = __game.beat - 2 - __game.moveIndex * __game.plan.beatsPerMove; return l > 0.3 && l < 0.9; })()`, 15000);
-  const lvlKey = await c.eval(`__game.hud.key`);
-  const lvlHits = await c.eval(`__game.stats.hits`);
-  const b2 = await c.eval(selBox(`#touchpad button[data-key="${lvlKey}"]`));
-  await c.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: b2.x + b2.w / 2, y: b2.y + b2.h / 2 }] });
-  await sleep(40);
-  await c.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  // level tap — 窗口只有不到半拍，CDP 往返会错过；在页面里按帧判定并直接点按钮
+  const tapInWindow = (mode) =>
+    c.eval(`new Promise((res) => {
+      const t0 = performance.now();
+      const flip = { "↑": "↓", "↓": "↑", "←": "→", "→": "←" };
+      const tick = () => {
+        const g = window.__game;
+        if (g && g.phase === 'level' && g.moveIndex >= 0 && g.hud.key && !g.judged) {
+          const l = g.beat - 2 - g.moveIndex * g.plan.beatsPerMove;
+          if (l > 0.15 && l < g.plan.beatsPerMove - 0.15) {
+            const key = ${JSON.stringify(mode)} === 'wrong' ? flip[g.hud.key] : g.hud.key;
+            const b = document.querySelector('#touchpad button[data-key="' + key + '"]');
+            if (!b) return res({ ok: false, key, local: +l.toFixed(2), hits: g.stats.hits });
+            const hits = g.stats.hits;
+            b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch' }));
+            setTimeout(() => b.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'touch' })), 30);
+            return res({ ok: true, key, local: +l.toFixed(2), hits, judgedNow: g.judged, phaseNow: g.phase, moveNow: g.moveIndex });
+          }
+        }
+        if (performance.now() - t0 > 15000) return res({ ok: false, key: '', local: -1, hits: 0 });
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    })`);
+
+  const firstTap = await tapInWindow("right");
+  const lvlReady = firstTap.ok;
+  const lvlKey = firstTap.key;
+  const lvlHits = firstTap.hits;
   await sleep(350);
   const lvlTap = await c.eval(`({ phase: __game.phase, hits: __game.stats.hits, judged: __game.judged, failed: __game.failed, best: __game.best, local: +(__game.beat - 2 - __game.moveIndex * __game.plan.beatsPerMove).toFixed(2) })`);
   const lvlScored = lvlTap.hits === lvlHits + 1 || (await c.waitFor(`__game.stats.hits === ${lvlHits + 1}`, 5000));
-  check("level tap judges the move", lvlReady && lvlTap.judged && !lvlTap.failed && lvlTap.best === 1 && lvlScored, { lvlKey, lvlHits, lvlTap, lvlScored });
+  check("level tap judges the move", lvlReady && lvlTap.judged && !lvlTap.failed && lvlTap.best === 1 && lvlScored, { lvlKey, firstTap, lvlHits, lvlTap, lvlScored });
   await c.shot("22-phone-level");
+
+  // intentionally tap the wrong key, then restart from the result screen
+  const second = await tapInWindow("wrong");
+  const nextWin = second.ok;
+  const curKey = second.key;
+  const wrongKey = curKey;
+  const dead = await c.waitFor(`__game.phase === 'dead'`, 8000);
+  const resultShown = await c.waitFor(`!document.getElementById('result').classList.contains('hidden')`, 8000);
+  const result = await c.eval(`(() => {
+    const r = document.getElementById('result');
+    const b = document.getElementById('btn-again');
+    const rb = b.getBoundingClientRect();
+    return { shown: !r.classList.contains('hidden'),
+      line: document.getElementById('final-line').textContent,
+      level: document.getElementById('final-level').textContent,
+      again: { x: +rb.left.toFixed(1), y: +rb.top.toFixed(1), w: +rb.width.toFixed(1), h: +rb.height.toFixed(1) },
+      inView: rb.top >= 0 && rb.bottom <= innerHeight + 0.5,
+      overflow: document.documentElement.scrollWidth <= innerWidth + 1 };
+  })()`);
+  check("wrong tap kills the run on phone", nextWin && dead && resultShown && result.again.w >= 44, { curKey, wrongKey, nextWin, dead, result });
+  check("phone result screen fits and restart is reachable", result.shown && result.overflow && result.inView && result.again.h >= 44, result);
+  await c.shot("23-phone-death");
+
+  await c.click("#btn-again");
+  const restarted = await c.waitFor(`!!__game && __game.phase === 'level' && __game.level === 1 && __game.stats.hits === 0`, 8000);
+  check("phone restart starts a clean run with the pad", restarted && (await c.eval(`getComputedStyle(document.getElementById('touchpad')).display === 'flex'`)), { restarted });
   return c;
 }
 
