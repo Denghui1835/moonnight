@@ -6,10 +6,10 @@
     <meta name="theme-color" content="#050607" />
     <meta
       name="description"
-      content="《月夜》MOONNIGHT · DEAD BEAT：最后一拍。午夜十二点，旧剧院的灯一盏盏亮起。镜子里有人朝你伸出手。跟着她跳——跳错一拍，他们就会吃掉你的脑子。"
+      content="MOONLIGHT · DEAD BEAT：最后一拍。午夜十二点，旧剧院的灯一盏盏亮起。镜子里有人朝你伸出手。跟着她跳——跳错一拍，他们就会吃掉你的脑子。"
     />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="月夜 MOONNIGHT · DEAD BEAT：最后一拍" />
+    <meta property="og:title" content="MOONLIGHT · DEAD BEAT：最后一拍" />
     <meta
       property="og:description"
       content="午夜十二点，旧剧院的灯一盏盏亮起。镜子里有人朝你伸出手。跟着她跳——跳错一拍，他们就会吃掉你的脑子。"
@@ -20,9 +20,9 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23050607'/%3E%3Ccircle cx='30' cy='30' r='18' fill='%23b9d4cf'/%3E%3Ccircle cx='39' cy='23' r='16' fill='%23050607'/%3E%3C/svg%3E"
     />
-    <title>月夜 · MOONNIGHT</title>
-    <script type="module" crossorigin src="/moonnight/assets/index-D2UM6ZrH.js"></script>
-    <link rel="stylesheet" crossorigin href="/moonnight/assets/index-DFthY50X.css">
+    <title>MOONLIGHT · DEAD BEAT</title>
+    <script type="module" crossorigin src="/moonnight/assets/index-DhTk9n7c.js"></script>
+    <link rel="stylesheet" crossorigin href="/moonnight/assets/index-CsVJQKOp.css">
   </head>
   <body>
     <div id="app">
@@ -31,7 +31,12 @@
       <div class="vignette"></div>
       <div class="grain"></div>
 
-      <video id="cam" class="hidden" playsinline muted autoplay></video>
+      <!-- 摄像头小窗：画面 + 骨架 + 状态字同在一个框里，整框按住就能拖 -->
+      <div id="camwrap" class="camwrap hidden">
+        <video id="cam" class="hidden" playsinline muted autoplay></video>
+        <canvas id="skel" class="hidden"></canvas>
+        <div id="camtag" class="hidden"></div>
+      </div>
 
       <div id="hud" class="hidden">
         <div class="hud-top">
@@ -77,14 +82,22 @@
 
       <div id="start" class="screen">
         <div class="title-wrap">
-          <h1>月&nbsp;夜</h1>
-          <div class="en">M O O N N I G H T</div>
-          <div class="tagline">DEAD BEAT · 最后一拍</div>
+          <h1>Moonlight</h1>
+          <div class="en">DEAD&nbsp;BEAT&nbsp;·&nbsp;最后一拍</div>
+          <div class="tagline">一部体感节奏恐怖游戏</div>
         </div>
         <p class="brief">
-          午夜十二点，旧剧院的灯一盏盏亮起。<br />
-          镜子里有人朝你伸出手。跟着她跳——跳错一拍，他们就会吃掉你的脑子。
+          旧剧院，午夜零点。灯一盏盏亮起。<br />
+          镜子里的人总是快你半拍，舞跳得很酷。<br />
+          跟着她跳完最后一拍——跳错，你就留在最后一排。
         </p>
+        <div class="avatar-choice" role="group" aria-label="选择角色">
+          <span class="choice-label">先选择你要进入镜中的身份</span>
+          <div class="choice-buttons">
+            <button id="avatar-female" class="avatar-btn selected" type="button"><span class="avatar-silhouette avatar-f">♀</span><span>女生</span></button>
+            <button id="avatar-male" class="avatar-btn" type="button"><span class="avatar-silhouette avatar-m">♂</span><span>男生</span></button>
+          </div>
+        </div>
         <div class="actions">
           <button id="btn-cam" class="primary">用摄像头跟练</button>
           <button id="btn-keys" class="ghost">键盘模式<span class="only-keys">（方向键）</span><span class="only-touch">（触屏点下面四个键）</span></button>
@@ -121,6 +134,7 @@
           <button id="btn-again2" class="primary">再跳一次</button>
         </div>
       </div>
+
 
       <div id="toast" class="toast"></div>
     </div>
