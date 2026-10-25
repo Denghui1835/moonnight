@@ -21,8 +21,8 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23050607'/%3E%3Ccircle cx='30' cy='30' r='18' fill='%23b9d4cf'/%3E%3Ccircle cx='39' cy='23' r='16' fill='%23050607'/%3E%3C/svg%3E"
     />
     <title>MOONLIGHT · DEAD BEAT</title>
-    <script type="module" crossorigin src="/moonnight/assets/index-DhTk9n7c.js"></script>
-    <link rel="stylesheet" crossorigin href="/moonnight/assets/index-CsVJQKOp.css">
+    <script type="module" crossorigin src="/moonnight/assets/index-Cz6SLm4b.js"></script>
+    <link rel="stylesheet" crossorigin href="/moonnight/assets/index-Dgh1-sHb.css">
   </head>
   <body>
     <div id="app">
@@ -135,6 +135,48 @@
         </div>
       </div>
 
+      <!-- 序幕：点开始之后先讲这段故事，再进教学关。任何时刻都能跳过 -->
+      <div id="prologue" class="prologue hidden">
+        <!-- 每句一张图，两层轮换着淡入；第 1、2 句没有图，只有下面那张演出单 -->
+        <div class="prologue-bg" aria-hidden="true">
+          <div class="pbg-layer"></div>
+          <div class="pbg-layer"></div>
+        </div>
+        <div class="prologue-glow" aria-hidden="true"></div>
+
+        <!-- 烧掉一半的演出单。上面的字全部由代码排，模型只负责画布景：
+             AI 画中文必成乱码，这种有实义的物件只能自己排 -->
+        <div class="prologue-bill" aria-hidden="true">
+          <div class="bill-sheet">
+            <div class="bill-ink">
+              <div class="bill-brand">MOONLIGHT</div>
+              <div class="bill-rule"></div>
+              <div class="bill-title">没有观众的演出</div>
+              <div class="bill-meta">午夜零点 · 旧剧院</div>
+              <div class="bill-rule short"></div>
+              <div class="bill-row">
+                <span class="bill-key">舞者</span>
+                <span class="bill-name gone"></span>
+              </div>
+              <div class="bill-row">
+                <span class="bill-key">　　</span>
+                <span class="bill-name left"><i></i></span>
+              </div>
+              <div class="bill-rule short"></div>
+              <div class="bill-foot">演出重新开始</div>
+            </div>
+            <div class="bill-burn"></div>
+          </div>
+        </div>
+
+        <div class="prologue-kicker">M O O N L I G H T</div>
+        <div class="prologue-inner">
+          <p id="prologue-line" class="prologue-line"></p>
+          <div id="prologue-dots" class="prologue-dots"></div>
+          <div id="prologue-hint" class="prologue-hint">点击继续</div>
+        </div>
+        <button id="prologue-skip" class="ghost small prologue-skip" type="button">跳过序幕</button>
+      </div>
 
       <div id="toast" class="toast"></div>
     </div>
