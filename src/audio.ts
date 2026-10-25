@@ -1,6 +1,33 @@
-/** Web Audio engine: procedural funk/horror groove + all sfx. No samples, no external assets. */
+/**
+ * Web Audio engine.
+ *
+ * 主路径：播放真实音频文件——背景乐 /music/dead-beat.mp3，音效 /sfx/*.mp3。
+ * 兜底：原来那套纯程序合成的 funk/horror 音序器（含 MetalRig）保留在此，
+ * 某个文件加载失败或未配置时自动回退，所以没有素材也能跑。
+ */
 
 import { MetalRig } from "./metal";
+
+export type SfxName = "door" | "step" | "crow" | "scream" | "glass" | "crowd";
+
+/**
+ * 站点前缀。开发与国内镜像是 "/"，GitHub Pages 是 "/moonnight/"。
+ * 写死绝对路径会让 Pages 上整包音效与配乐 404、静默退回程序合成——听不出坏，但听不到原曲。
+ */
+const SITE = import.meta.env.BASE_URL;
+
+/** 真实音效文件（来自 /public/sfx）。留空或加载失败则逐项回退到程序合成。 */
+export const SFX_FILES: Partial<Record<SfxName, string>> = {
+  door: `${SITE}sfx/door.mp3`,
+  step: `${SITE}sfx/step.mp3`,
+  crow: `${SITE}sfx/crow.mp3`,
+  scream: `${SITE}sfx/scream.mp3`,
+  glass: `${SITE}sfx/glass.mp3`,
+  crowd: `${SITE}sfx/crowd.mp3`,
+};
+
+/** 真实背景乐（来自 /public/music）。为 null 或加载失败则回退到程序合成。 */
+export const MUSIC_FILE: string | null = `${SITE}music/dead-beat.mp3`;
 
 const NOTE = (n: number) => 440 * Math.pow(2, (n - 69) / 12);
 const D2 = NOTE(38), F2 = NOTE(41), G2 = NOTE(43), A2 = NOTE(45), BB2 = NOTE(46), D3 = NOTE(50);
@@ -35,6 +62,11 @@ export class AudioEngine {
   private metalOn = false;
   private metalBar = 0;
   private muted = false;
+
+  private musicBuffer: AudioBuffer | null = null;
+  private musicSource: AudioBufferSourceNode | null = null;
+  private musicStartedAt = 0;
+  private sfxBuffers: Partial<Record<SfxName, AudioBuffer>> = {};
 
   get ready(): boolean {
     return this.ctx !== null;
@@ -88,6 +120,42 @@ export class AudioEngine {
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
 
     if (ctx.state === "suspended") await ctx.resume();
+
+    if (MUSIC_FILE) {
+      void this.loadBuffer(MUSIC_FILE).then((b) => {
+        if (b) this.musicBuffer = b;
+      });
+    }
+    for (const name of Object.keys(SFX_FILES) as SfxName[]) {
+      const url = SFX_FILES[name];
+      if (!url) continue;
+      void this.loadBuffer(url).then((b) => {
+        if (b) this.sfxBuffers[name] = b;
+      });
+    }
+  }
+
+  private async loadBuffer(url: string): Promise<AudioBuffer | null> {
+    if (!this.ctx) return null;
+    try {
+      const res = await fetch(url);
+      const arr = await res.arrayBuffer();
+      return await this.ctx.decodeAudioData(arr);
+    } catch (e) {
+      console.warn(`[audio] 加载 ${url} 失败，回退到程序合成`, e);
+      return null;
+    }
+  }
+
+  private playSfxFile(name: SfxName): boolean {
+    if (!this.ctx) return false;
+    const buf = this.sfxBuffers[name];
+    if (!buf) return false;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.sfx);
+    src.start(this.ctx.currentTime);
+    return true;
   }
 
   setTempo(bpm: number) {
@@ -116,6 +184,18 @@ export class AudioEngine {
   startGroove() {
     if (!this.ctx || this.playing) return;
     this.playing = true;
+
+    if (this.musicBuffer) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.musicBuffer;
+      src.connect(this.music);
+      const t = this.ctx.currentTime + 0.08;
+      src.start(t);
+      this.musicSource = src;
+      this.musicStartedAt = t;
+      return;
+    }
+
     this.stepIdx = 0;
     this.metalBar = 0;
     this.nextStepTime = this.ctx.currentTime + 0.08;
@@ -124,10 +204,41 @@ export class AudioEngine {
 
   stopGroove() {
     this.playing = false;
+    if (this.musicSource) {
+      try {
+        this.musicSource.stop();
+      } catch {
+        /* 已经停了 */
+      }
+      this.musicSource = null;
+    }
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
     }
+  }
+
+  /**
+   * 真实背景乐的开播时刻，供游戏把拍子锚到音乐的实际播放位置上。
+   * 返回 null 表示当前走的是程序合成，没有真实时间轴可锚。
+   */
+  get musicAnchor(): number | null {
+    return this.musicBuffer ? this.musicStartedAt : null;
+  }
+
+  /** 真实背景乐是否已就绪（解码完成），用于决定走哪条时间轴 */
+  get hasMusicFile(): boolean {
+    return this.musicBuffer !== null;
+  }
+
+  /**
+   * 背景乐已经播了多少秒。只在音频真的在跑、且确实有一路音乐源时才有值——
+   * 音频被挂起时返回 null，让游戏退回帧时钟，避免两个时间基混用导致拍子跳变。
+   */
+  get musicPosition(): number | null {
+    if (!this.ctx || !this.musicSource) return null;
+    if (this.ctx.state !== "running") return null;
+    return Math.max(0, this.ctx.currentTime - this.musicStartedAt);
   }
 
   duckMusic(amount: number, seconds: number) {
@@ -322,6 +433,7 @@ export class AudioEngine {
 
   crow() {
     if (!this.ctx) return;
+    if (this.playSfxFile("crow")) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
     for (let i = 0; i < 2; i++) {
@@ -362,6 +474,7 @@ export class AudioEngine {
 
   door() {
     if (!this.ctx) return;
+    if (this.playSfxFile("door")) return;
     const t = this.ctx.currentTime;
     const f = this.noiseBurst(t, 0.5, "bandpass", 320, 3, 0.3, this.sfx);
     f.frequency.setValueAtTime(300, t);
@@ -393,6 +506,7 @@ export class AudioEngine {
 
   glass() {
     if (!this.ctx) return;
+    if (this.playSfxFile("glass")) return;
     const t = this.ctx.currentTime;
     this.noiseBurst(t, 0.5, "highpass", 2600, 1, 0.5, this.sfx);
     this.noiseBurst(t + 0.02, 0.35, "bandpass", 5200, 8, 0.25, this.sfx);
@@ -401,6 +515,7 @@ export class AudioEngine {
   /** a human scream: saw + three formants + falling pitch + breath */
   scream() {
     if (!this.ctx) return;
+    if (this.playSfxFile("scream")) return;
     const ctx = this.ctx;
     const t0 = ctx.currentTime;
     const dur = 1.1;
@@ -471,6 +586,7 @@ export class AudioEngine {
   /** the crowd of them, dry and voiceless */
   crowd() {
     if (!this.ctx) return;
+    if (this.playSfxFile("crowd")) return;
     const ctx = this.ctx;
     const t = ctx.currentTime;
     for (let i = 0; i < 5; i++) {
@@ -497,6 +613,7 @@ export class AudioEngine {
 
   step() {
     if (!this.ctx) return;
+    if (this.playSfxFile("step")) return;
     const t = this.ctx.currentTime;
     this.noiseBurst(t, 0.08, "lowpass", 420, 1, 0.16, this.sfx);
   }

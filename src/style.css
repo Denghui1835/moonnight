@@ -163,6 +163,16 @@ body {
   letter-spacing: 0.06em;
   color: var(--moon);
   margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* 「共 6 关」压到关卡名下面一行：110px 装不下两截，挤在一行会折成三行 */
+.of {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--moon-dim);
+  margin-top: 4px;
+  white-space: nowrap;
 }
 
 .dots {
@@ -313,7 +323,8 @@ body {
 #btn-mute {
   position: absolute;
   left: 34px;
-  top: 78px;
+  /* 让开抬头左栏的两行字（第 N 关 / 共 N 关），压在下面会糊成一团 */
+  top: 116px;
   z-index: 6;
   opacity: 0.62;
   pointer-events: auto;
@@ -653,6 +664,17 @@ h2 {
   max-width: 460px;
   min-height: 52px;
   white-space: pre-line;
+}
+
+/* 死亡归因：一行小字，血红但克制——只说错在哪一拍，不喊口号 */
+.final-why {
+  font-size: 12px;
+  line-height: 1.9;
+  letter-spacing: 0.12em;
+  color: rgba(226, 96, 84, 0.92);
+  max-width: 460px;
+  margin-top: -6px;
+  text-shadow: 0 0 18px rgba(194, 53, 45, 0.4);
 }
 
 .toast {

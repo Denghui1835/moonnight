@@ -457,6 +457,17 @@ function drawRoom(ctx: CanvasRenderingContext2D, w: number, h: number, scene: Sc
   spill.addColorStop(1, "rgba(150, 190, 185, 0)");
   ctx.fillStyle = spill;
   ctx.fillRect(0, horizon - h * 0.15, w, h * 0.55);
+
+  // 和 3D 一致的「一点血红」：镜脚那道安全出口的灯，红光贴着地面漫开。
+  // 挂在高处只会像局部故障色；贴地才说得通，也和 3D 的灯位对得上。
+  const glow = ctx.createRadialGradient(w * 0.5, wy1, 0, w * 0.5, wy1, Math.max(w, h) * 0.55);
+  glow.addColorStop(0, `rgba(255, 70, 44, ${0.06 + scene.blood * 0.16})`);
+  glow.addColorStop(1, "rgba(255, 70, 44, 0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, wy1 - h * 0.12, w, h - wy1 + h * 0.12);
+
+  ctx.fillStyle = `rgba(178, 38, 28, ${0.55 + scene.blood * 0.4})`;
+  ctx.fillRect(wx0 + 10, wy1 - 2, wx1 - wx0 - 20, 2);
 }
 
 function drawFog(ctx: CanvasRenderingContext2D, w: number, h: number, time: number) {

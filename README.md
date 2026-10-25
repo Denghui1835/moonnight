@@ -16,9 +16,10 @@
 | **国内镜像 A（推荐，大陆直连）** | <https://moonnight-c1n29gwia6s.qoder.zone/> |
 | **国内镜像 B（备用）** | <https://moonnight-mirror-rvzkngbzcr9.qoder.website/> |
 | **GitHub Pages（主站）** | <https://denghui1835.github.io/moonnight/> |
-| 配乐试听 | [GitHub Pages](https://denghui1835.github.io/moonnight/music/moonnight-metal.mp3) · [镜像 A](https://moonnight-c1n29gwia6s.qoder.zone/music/moonnight-metal.mp3) |
+| 主题曲 | `public/music/dead-beat.mp3`（5:33 / 129.2 BPM，原创，AI 合成） |
 
-- 三个入口是同一份代码的两个构建（Pages 用 `/moonnight/` 前缀，镜像用根路径），玩法完全一致；GitHub Pages 在国内部分网络/代理下会打不开，优先用镜像。两个镜像域名分属两套 Qoder 账号凭证，每次重新构建后都要各发一次；截至 2026-10-24 深夜，Pages 与镜像 A 都是 `index-5c9XJpBD.js` + `index-DlElkWp7.css`（可点静音键 + 手机上点亮当前提示键），镜像 B 还停在 `index-DKMki3oD.js`（归另一套凭证，玩法一致，只是少了最近几处界面修正）。
+- 三个入口是同一份代码的两个构建（Pages 用 `/moonnight/` 前缀，镜像用根路径），玩法一致；两个镜像域名分属两套 Qoder 账号凭证，每次重新构建后要各发一次。
+- **当前版本（2026-10-24 夜）：** Pages 是 `index-D2UM6ZrH.js` + `index-DFthY50X.css`，含死亡前摇、失败归因、抬头「第 N 关 / 共 N 关」、镜脚那道血红安全出口灯。两个镜像还停在上一版构建（镜像 A `index-CaSHR2cu.js`、镜像 B `index-DKMki3oD.js`），**看最新版请走 GitHub Pages**；镜像重发要在 Qoder 里用 Sites 工具完成。GitHub Pages 在国内部分网络/代理下会打不开，届时先用镜像，玩法不受影响。
 - 部署不是 push 到 `main` 就自动生效：Pages 走 `gh-pages` 分支，仓库里没有 workflow，改完要按 `docs/验证记录.md` 第 11.4 节把 `dist/` 推上 `gh-pages`。
 - 手机扫码（左：镜像，右：GitHub Pages）：
 
@@ -46,8 +47,9 @@
 - **键盘模式**：`↑ ↓ ← →`（或 `W A S D`）对应四个动作，难度与摄像头一致。
 - **手机触控**：触屏设备自动显示底部四键舞蹈板，点按即可玩，无需外接键盘。
 - **教学关**：第 0 关不会死，可「重看这个动作」「重看全部」，也可直接跳过。
-- **肉鸽**：正式关跳错一次，僵尸立刻扑上来，回到第 1 关。
-- **六关**：BPM 128 → 168，动作数 4 → 8；第 3 关起切入重金属编曲层。
+- **肉鸽**：正式关跳错一次就结束，回到第 1 关。判错后有 0.45 秒预兆（音乐抽空、镜脚那道红灯亮起），不是突然扑脸。
+- **死得明白**：结算页会写明死在哪一关、第几拍、该做什么、你做了什么。
+- **六关**：动作数 8 → 18，全程 129.2 BPM 跟着主题曲走；编舞逐关加花。
 - **终章**：跳完最后一支没教过的舞，队伍里第一个人的来历会被揭开。
 
 ## 操作
@@ -63,13 +65,13 @@
 
 ## 原创配乐
 
-[`docs/music/moonnight-metal.wav`](docs/music/moonnight-metal.wav) —— **原创、程序合成**，65.66 秒 / 148 BPM / D 弗里几亚小调：
-双轨失真吉他、双踩底鼓、贝斯跟 riff、鼓组过门与一段 solo，穿插乌鸦、心跳、门轴和远处惨叫。
+游戏内背景乐是 [`public/music/dead-beat.mp3`](public/music/dead-beat.mp3) —— **原创作品**，由我用 AI 音乐生成工具合成（旋律、编曲、鼓组均为我生成与挑选，没有翻唱、没有采样任何既有歌曲）。5 分 33 秒 / 129.2 BPM。
 
-- 由 `src/metal.ts`（编曲引擎）经 `src/metalRender.ts`（`OfflineAudioContext`）离线渲染导出；
-- 游戏第 3 关起实时调度同一套编曲层，试听文件与实机听感一致；
-- 无采样、无外部音源，未引用任何既有作品的旋律或 riff。仅参考 80 年代恐怖摇滚的氛围与硬摇滚配器。
-- 细节：[docs/music/README.md](docs/music/README.md)
+- 我用 librosa 做了真实的节拍与小节分析：breakdown 从第 564 拍开始，高潮段为第 598–680 拍，尾声从第 680 拍之后开始；
+- **编舞表照着这首歌的真实段落写**：第 1–6 关逐关加花、密度递增；终章分 breakdown 与高潮两段，动作收回到「伸手、退步、转身、抬头」四个核心动作；
+- 整首歌**全程只播一遍**，换关不重播；节拍直接锚在音轨实际播放位置上（`AudioContext.currentTime` 减起播时刻），音频被挂起时退回帧时钟、恢复后重新对齐。
+
+早期还有一首**程序合成**的实验曲 [`docs/music/moonnight-metal.wav`](docs/music/moonnight-metal.wav)（65.66 秒 / 148 BPM，由 `src/metal.ts` + `src/metalRender.ts` 离线渲染）。它现在只作为兜底：音频文件缺失或加载失败时才启用，代码与音频完整保留。细节见 [docs/music/README.md](docs/music/README.md)。
 
 ## 技术
 
@@ -77,10 +79,10 @@
 |---|---|
 | 构建 | Vite + TypeScript（strict） |
 | 渲染 | Three.js r170 实时 3D：程序化人偶、真实镜面反射、Bloom、体积光、菲涅尔轮廓光；WebGL 不可用时自动退回 Canvas 2D 剪影 |
+| 音频 | 真实音轨 + 真实音效采样（门轴/脚步/乌鸦/惨叫/玻璃/尸群），任一文件缺失自动回退程序合成；节拍锚在音轨播放位置 |
 | 体感 | MediaPipe PoseLandmarker (lite)，wasm 与模型全量本地化，不依赖外网 |
 | 判定 | 10 个加权姿态特征；键盘模式共用同一套节拍窗口 |
-| 音频 | Web Audio 实时合成，25ms 调度 / 120ms 前瞻；音频时钟带单调回退与恢复重锚 |
-| 金属层 | 实时与离线共用编曲引擎；`WaveShaper` 失真、多振荡器吉他、噪声+滤波鼓 |
+| 备用音频 | 程序合成兜底：25ms 调度 / 120ms 前瞻，音频时钟带单调回退与恢复重锚 |
 | 兼容 | 摄像头失败自动降级并关闭轨道；移动端 375px 无横向溢出，触屏自动出现四键舞蹈板 |
 
 姿势模型与 wasm 运行时来自 [MediaPipe](https://github.com/google-ai-edge/mediapipe)（Apache-2.0），已随仓库本地化。
@@ -92,7 +94,7 @@ npm install
 npm run dev      # http://localhost:5173
 npm run build    # 产出 dist/
 npm run preview  # 预览生产构建
-npm run qa       # 桌面 E2E（47 项，含 9 项 3D 回退/帧率；建议 QA_URL 指向 npm run build + vite preview 的生产构建）
+npm run qa       # 桌面 E2E（50 项，含 3D 回退/帧率/死亡前摇与归因；建议 QA_URL 指向 npm run build + vite preview 的生产构建）
 npm run touchqa  # 手机触控 E2E（29 项，375×812 设备模拟；QA_LIVE=1 走线上 DOM 冒烟）
 npm run mirror   # dist -> dist-mirror（国内镜像用的根路径版）
 npm run qr       # 重新生成试玩二维码
@@ -124,15 +126,16 @@ docs/
   music/         原创金属配乐与说明
   screenshots/   截图
 tools/
-  qa.mjs         CDP 桌面 E2E 测试（32 项）
-  touchqa.mjs    CDP 手机触控 E2E 测试（21 项）
+  qa.mjs         CDP 桌面 E2E 测试（50 项）
+  touchqa.mjs    CDP 手机触控 E2E 测试（29 项）
 ```
 
 ## 设计文档
 
 - [作品介绍](docs/作品介绍.md)
 - [完整故事](docs/故事-最终版.md)
-- [项目规划书](docs/规划书.md)
+- [产品规划书](docs/产品规划书.md)（正式版，另有 `docs/产品规划书.docx`）
+- [项目规划书](docs/规划书.md)（立项期草案）
 - [故事设定](docs/故事设定.md)
 - [验证记录](docs/验证记录.md)
 - [演示脚本](docs/演示脚本.md)
@@ -140,8 +143,9 @@ tools/
 ## 原创性
 
 - 代码、美术、音乐全部原创。
-- 美术为程序化剪影，没有任何图片素材进入游戏。
-- 配乐与音效全部由 Web Audio 合成，没有第三方曲目或采样。
+- 默认画面是程序化剪影，没有任何图片素材进入渲染链路。
+- 主题曲与音效为原创素材（AI 生成 / 自行采样合成），没有第三方曲目或采样。
+- `public/plates/` 里存有宣发用的剧照（血色版，与 `宣发/分镜图_写实版/` 同一张），只用于默认关闭的写实底板实验（`?plate=1`），不参与默认画面。
 - 编舞为原创动作，未使用任何已有作品的编舞。
 - 仅以《Thriller》的恐怖叙事氛围与《Beat It》的硬摇滚配器作为风格参考，未复制任何旋律、riff 或受版权保护的段落。
 

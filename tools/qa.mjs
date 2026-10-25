@@ -233,6 +233,7 @@ async function keyboardRun(port) {
   await sleep(1500);
   const hudDom = await c.eval(`({
     round: document.getElementById('round').textContent,
+    roundTotal: document.getElementById('round-total').textContent,
     score: document.getElementById('score').textContent,
     dots: [...document.querySelectorAll('#dots i')].map((i) => i.className),
     moveinfo: document.getElementById('moveinfo') ? document.getElementById('moveinfo').textContent : null,
@@ -240,7 +241,7 @@ async function keyboardRun(port) {
     hudVisible: !document.getElementById('hud').classList.contains('hidden'),
     scoreVisible: getComputedStyle(document.getElementById('score')).opacity
   })`);
-  check("HUD shows round/score/dots/key", hudDom.round === "第 1 关" && Number(hudDom.score) >= 4 && hudDom.dots.length === 4 && hudDom.dots.includes("now") && hudDom.cueKey.length === 1, hudDom);
+  check("HUD shows round/score/dots/key", hudDom.round === "第 1 关" && hudDom.roundTotal === "共 6 关" && Number(hudDom.score) >= 4 && hudDom.dots.length === 8 && hudDom.dots.includes("now") && hudDom.cueKey.length === 1, hudDom);
   await c.shot("03-level1");
 
   // audio clock suspend / resume
@@ -323,7 +324,7 @@ async function keyboardRun(port) {
   const levels = [];
   let shotMid = false;
   const runStart = Date.now();
-  while (Date.now() - runStart < 150000) {
+  while (Date.now() - runStart < 320000) {
     const s = await c.eval(`({ phase: __game.phase, level: __game.level, bpm: __game.bpm, hits: __game.stats.hits, round: __game.hud.round })`);
     if (s.phase === "level" && !levels.some((l) => l.level === s.level && l.bpm === s.bpm)) levels.push(s);
     if (s.phase === "level" && s.level >= 5 && !shotMid) {
@@ -336,8 +337,9 @@ async function keyboardRun(port) {
     await sleep(250);
   }
   const final = await c.eval(`({ phase: __game.phase, level: __game.level, hits: __game.stats.hits, perfects: __game.stats.perfects, results: __game.results.slice() })`);
-  check("all 6 levels use rising bpm 128..168", JSON.stringify(levels.map((l) => l.bpm)) === JSON.stringify([128, 136, 144, 152, 160, 168]), levels.map((l) => ({ level: l.level, bpm: l.bpm, round: l.round })));
-  check("full keyboard run reaches the ending with 38 level hits", final.phase === "ending" && final.hits === 38 && final.level === 6, final);
+  // 整首歌一个速度：每关都踩 129.2，靠动作密度而不是变速来加压
+  check("all levels run at the song's 129.2 bpm", levels.length > 0 && levels.every((l) => l.bpm === 129.2), levels.map((l) => ({ level: l.level, bpm: l.bpm, round: l.round })));
+  check("full keyboard run reaches the ending with 106 level hits", final.phase === "ending" && final.hits === 106 && final.level === 6, final);
 
   const ended = await c.waitFor(`!document.getElementById('ending').classList.contains('hidden')`, 12000);
   const endingText = await c.eval(`({
@@ -346,7 +348,7 @@ async function keyboardRun(port) {
     line: document.getElementById('ending-line').textContent
   })`);
   await sleep(900);
-  check("ending screen shows 38 hits and the first-one reveal", ended && endingText.hits === "38" && endingText.line.includes("队伍的最后"), endingText);
+  check("ending screen shows 106 hits and the first-one reveal", ended && endingText.hits === "106" && endingText.line.includes("队伍的最后"), endingText);
   await sleep(300);
   await c.shot("07-ending");
 
@@ -389,6 +391,12 @@ async function allTutorialDeathRun(port) {
   const wrong = await c.eval(`(() => { const k = __game.hud.key; const M = { '↑': 'ArrowUp', '↓': 'ArrowDown', '←': 'ArrowLeft', '→': 'ArrowRight' }; const w = ['↑','↓','←','→'].find((x) => x !== k); return { label: w, raw: M[w] }; })()`);
   await c.eval(`__game.pushKey(${JSON.stringify(wrong.raw)})`);
   const died = await c.waitFor(`__game.phase === 'dead'`, 3000);
+  // 前摇：判错的那一下不该马上扑上来。0.45 秒里只有血色在渗、音乐已抽空，lunge 必须是 0
+  await sleep(140);
+  const warn = await c.eval(`({ t: __game.deadT, lunge: __game.lunge, blood: __game.blood, warned: __game.warned, shake: __game.shake })`);
+  check("death opens with a 0.45s pre-warning before they lunge", died && warn.t > 0 && warn.t < 0.45 && warn.lunge === 0 && warn.blood > 0 && warn.blood <= 0.27 && warn.warned === false, warn);
+  const impact = await c.waitFor(`__game.warned === true && __game.lunge > 0.2`, 3000);
+  check("the lunge still lands after the warning", impact, await c.eval(`({ t: __game.deadT, lunge: __game.lunge, blood: __game.blood })`));
   const shown = await c.waitFor(`!document.getElementById('result').classList.contains('hidden')`, 6000);
   const r = await c.eval(`({
     hits: document.getElementById('final-hits').textContent,
@@ -398,6 +406,8 @@ async function allTutorialDeathRun(port) {
     tut: __game.stats.tutorialHits
   })`);
   check("score made only of tutorial hits is labelled 全是教学", died && shown && ready && r.hits === "4" && r.tut === 4 && r.lbl === "跳对 · 全是教学" && r.level === "第 1 关", { wrong, ...r });
+  const why = await c.eval(`({ text: document.getElementById('final-why').textContent, hidden: document.getElementById('final-why').classList.contains('hidden') })`);
+  check("death screen says which beat and which key you got wrong", shown && !why.hidden && why.text.includes("第 1 关") && why.text.includes("该按") && why.text.includes(wrong.label), { wrong, ...why });
   await c.shot("11-death-all-tutorial");
   check("all-tutorial death run: zero page errors", c.errors.length === 0, c.errors);
   await closeTarget(c);
@@ -569,8 +579,11 @@ async function cameraRun(port) {
   // synthesize an unplug: the app must fall back to keys without freezing
   const unplugged = await c.eval(`(() => { const v = document.getElementById('cam'); const t = v.srcObject && v.srcObject.getVideoTracks()[0]; if (!t) return false; t.dispatchEvent(new Event('ended')); return true; })()`);
   const degraded = await c.waitFor(`window.__game.mode === 'keys' && !window.__game.tracker`, 5000);
+  // 键盘提示要等下一帧 syncHud 才写进 DOM；在这里直接取样会撞上那一帧的空窗，
+  // 所以等它出现（有时限），而不是把「立刻就有」写进断言。
+  const cueShown = await c.waitFor(`document.getElementById('cue-key').textContent !== ''`, 2000);
   const lostState = await c.eval(`(() => { const v = document.getElementById('cam'); const g = window.__game; return { mode: g && g.mode, tracker: !!(g && g.tracker), videoHidden: v.classList.contains('hidden'), hasStream: !!v.srcObject, cue: document.getElementById('cue-key').textContent, toast: document.getElementById('toast').textContent, phase: g && g.phase }; })()`);
-  check("camera track ending mid-run degrades to keyboard", unplugged && degraded && lostState.videoHidden && !lostState.hasStream && lostState.cue !== "", { unplugged, ...lostState });
+  check("camera track ending mid-run degrades to keyboard", unplugged && degraded && lostState.videoHidden && !lostState.hasStream && cueShown, { unplugged, cueShown, ...lostState });
   check("camera loss toast explains the switch", /键盘/.test(lostState.toast || ""), lostState);
   report.logs.push({ run: "camera", state, tutWait, lv1, lv2, errors: c.errors });
   const realErrors = c.errors.filter((e) => !e.includes("Failed to fetch") && !e.includes("net::"));

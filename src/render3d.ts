@@ -23,6 +23,9 @@ const MIRROR_W = 8.6;
 const MIRROR_H = 4.7;
 const ROOM_HALF = 4.95;
 
+/** 写实底板：宣发海报那张剧照。有人物剪影就够了——海报里的舞者本来就是剪影。 */
+const PLATE_URL = `${import.meta.env.BASE_URL}plates/theater_wide.png`;
+
 const rnd = (i: number) => {
   const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
@@ -676,6 +679,8 @@ const GradeShader = {
       col *= mix(0.34, 1.0, vig);
 
       float edge = smoothstep(0.22, 0.86, length(d) * 1.45);
+      // 环境底色的一点血红：照宣发分镜的调色走，红只压在边缘，画面中间不脏
+      col = mix(col, vec3(col.r * 1.28 + 0.012, col.g * 0.62, col.b * 0.6), edge * 0.16);
       col = mix(col, vec3(col.r * 1.45 + 0.035, col.g * 0.24, col.b * 0.2), uBlood * edge * 0.9);
 
       gl_FragColor = vec4(col, 1.0);
@@ -712,9 +717,12 @@ export class Stage3D implements SceneRenderer {
   private doorL!: THREE.Mesh;
   private doorR!: THREE.Mesh;
 
+  private shell: THREE.Mesh[] = [];
   private floorPool: THREE.Mesh;
   private propLight: THREE.PointLight;
   private instLight!: THREE.PointLight;
+  /** 镜脚的安全出口灯：厅堂里唯一的一点血红 */
+  private exitGlow!: THREE.PointLight;
 
   private w = 1;
   private h = 1;
@@ -740,7 +748,7 @@ export class Stage3D implements SceneRenderer {
     this.camera.position.copy(CAM_POS);
     this.camera.lookAt(CAM_LOOK);
 
-    this.scene.fog = new THREE.FogExp2(0x07100f, 0.028);
+    this.scene.fog = new THREE.FogExp2(0x0c0a0a, 0.028);
 
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
@@ -749,6 +757,7 @@ export class Stage3D implements SceneRenderer {
 
     this.buildRoom();
     this.buildLights();
+    this.applyPlate();
 
     this.wire.line.renderOrder = 5;
     this.scene.add(this.wire.line);
@@ -839,6 +848,28 @@ export class Stage3D implements SceneRenderer {
     this.resize(w, h);
   }
 
+  /**
+   * 写实底板。海报那种画质靠的是图不是代码：一张剧场剧照当背景，
+   * 人物继续用剪影贴在前面，观感就跟海报一致了。
+   * 底板缺失（或 ?plate=0）时什么也不做，回到原来纯程序化的厅。
+   */
+  private applyPlate(): void {
+    // 默认关闭：粗拼一版看过，底板和现有取景/地面还没对齐，先留开关等美术定稿。
+    // 打开方式：?plate=1
+    if (new URLSearchParams(location.search).get("plate") !== "1") return;
+    new THREE.TextureLoader().load(
+      PLATE_URL,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        this.scene.background = tex;
+        // 底板已经把厅堂画黑了；程序化的墙和吊顶再挡在前面就是一块黑幕
+        for (const m of this.shell) m.visible = false;
+      },
+      undefined,
+      () => console.warn("[3d] 底板缺失，退回纯程序化厅堂"),
+    );
+  }
+
   private buildRoom(): void {
     const board = boardTexture();
     board.wrapS = board.wrapT = THREE.RepeatWrapping;
@@ -869,16 +900,19 @@ export class Stage3D implements SceneRenderer {
     leftWall.rotation.y = Math.PI / 2;
     leftWall.position.set(-ROOM_HALF, 3, -1);
     this.scene.add(leftWall);
+    this.shell.push(leftWall);
 
     const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(26, 6), wallMat);
     rightWall.rotation.y = -Math.PI / 2;
     rightWall.position.set(ROOM_HALF, 3, -1);
     this.scene.add(rightWall);
+    this.shell.push(rightWall);
 
     const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ color: 0x05090a, roughness: 1 }));
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = 5.2;
     this.scene.add(ceiling);
+    this.shell.push(ceiling);
 
     // 镜子：整面墙，故事里的那面
     const mirror = new Reflector(new THREE.PlaneGeometry(MIRROR_W, MIRROR_H), {
@@ -1006,6 +1040,21 @@ export class Stage3D implements SceneRenderer {
     // 跟着示范老师的一盏暖光：暗场里动作必须读得出来
     this.instLight = new THREE.PointLight(0xffcf96, 2.4, 5, 2);
     this.scene.add(this.instLight);
+
+    // 镜脚那道血红：整间厅堂只有这一处红。
+    // 挂在吊顶或侧墙都不进画面，只有贴地放在镜前，红光才会落到地板上、从背后勾住人偶。
+    this.exitGlow = new THREE.PointLight(0xff2a1e, 9, 7.5, 2);
+    this.exitGlow.position.set(0, 0.95, MIRROR_Z + 0.55);
+    this.scene.add(this.exitGlow);
+
+    // 灯管本体：一条极细的红线，让「红光是从哪来的」说得通
+    const exitPanel = new THREE.Mesh(
+      new THREE.PlaneGeometry(MIRROR_W * 0.94, 0.045),
+      new THREE.MeshBasicMaterial({ color: 0xff3a26, transparent: true, opacity: 0.72, toneMapped: false }),
+    );
+    exitPanel.position.set(0, 0.035, MIRROR_Z + 0.42);
+    exitPanel.rotation.x = -Math.PI / 2;
+    this.scene.add(exitPanel);
   }
 
   private buildBottles(): THREE.Group {
@@ -1201,6 +1250,13 @@ export class Stage3D implements SceneRenderer {
     this.camera.lookAt(CAM_LOOK);
 
     this.bloom.strength = 0.38 + (scene.crack > 0.4 ? 0.2 : 0) + sh * 0.16;
+
+    // 出口灯偶尔接触不良地闪一下；死亡时（blood 上升）红光跟着漫开，
+    // 前摇那 0.45 秒里玩家看到的就是"红灯亮起来了"
+    const dying = scene.blood;
+    const stutter = rnd(Math.floor(scene.time * 6)) > 0.94 ? 0.45 : 1;
+    this.exitGlow.intensity = (9 + dying * 9) * stutter;
+
     this.grade.uniforms.uTime.value = scene.time;
     this.grade.uniforms.uBlood.value = scene.blood;
     this.grade.uniforms.uGlitch.value = scene.glitch;

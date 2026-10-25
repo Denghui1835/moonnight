@@ -1,7 +1,7 @@
 import { AudioEngine } from "./audio";
 import { PoseTracker } from "./pose";
 import { blendParams, buildPose, easeInOut, matchScore, MoveParams, Pose } from "./rig";
-import { BASE, levelPlan, LevelPlan, MAX_LEVEL, MOVES, TUTORIAL } from "./moves";
+import { BASE, finalePlan, levelPlan, LevelPlan, MAX_LEVEL, MOVES, SONG_BPM, TUTORIAL } from "./moves";
 import { Figure, place, renderScene, Scene } from "./stage";
 import type { SceneRenderer } from "./render3d";
 
@@ -10,9 +10,29 @@ export type Phase = "intro" | "tutorial" | "level" | "levelup" | "dead" | "endin
 
 export type Stats = { level: number; hits: number; perfects: number; zombies: number; tutorialHits: number };
 
+/**
+ * 死亡归因。恐怖游戏里最劝退的不是死，是"不知道为什么死"——
+ * 所以结算要能说清：哪一关、第几拍、该做什么、你做了什么。
+ */
+export type DeathCause = {
+  level: number;
+  /** 1-based；0 表示还没进入动作就死了 */
+  moveNo: number;
+  moveTotal: number;
+  /** 该做的动作名与键位 */
+  expected: string;
+  expectedKey: string;
+  /** 玩家实际按的键；摄像头模式为空（身体没到位） */
+  pressed: string;
+  pressedName: string;
+  mode: GameMode;
+};
+
 export type Hud = {
   visible: boolean;
   round: string;
+  /** 「共 6 关」单独一行：和关卡名挤在一行会折成三行 */
+  roundTotal: string;
   hits: number;
   moveIndex: number;
   moveTotal: number;
@@ -31,7 +51,7 @@ export type GameDeps = {
   tracker: PoseTracker | null;
   mode: GameMode;
   renderer?: SceneRenderer | null;
-  onDeath: (s: Stats) => void;
+  onDeath: (s: Stats, why: DeathCause | null) => void;
   onEnding: (s: Stats) => void;
 };
 
@@ -40,6 +60,12 @@ type TutStep = { id: string; kind: "demo" | "do"; beats: number };
 const PASS = 0.45;
 const PERFECT = 0.75;
 const LEAD_IN = 2;
+/**
+ * 死亡前摇。
+ * 判错的瞬间不马上扑脸——音乐先抽空、血色先渗出来、怨魂先抬头，
+ * 0.45 秒后才真正撞上玻璃。这一下不是"剧透"，是把"被吓"换成"我知道我错了"。
+ */
+const DEATH_WARN = 0.45;
 
 /** 每关开头的一句叙事，之后让位给连对提示 */
 const LEVEL_LINES: Record<number, string> = {
@@ -51,7 +77,8 @@ const LEVEL_LINES: Record<number, string> = {
   6: "最后一遍。跳完就去看月亮。",
 };
 
-const KEY_MOVE: Record<string, string> = { "↑": "spread", "↓": "slump", "←": "clawL", "→": "clawR" };
+/** 键盘/触屏时玩家"自己跳"的那条线，四个方向就是核心四动作 */
+const KEY_MOVE: Record<string, string> = { "↑": "reach", "↓": "stepBack", "←": "twist", "→": "lookUp" };
 
 function normalizeKey(k: string): string {
   switch (k) {
@@ -86,6 +113,7 @@ export class Game {
   readonly hud: Hud = {
     visible: false,
     round: "",
+    roundTotal: "",
     hits: 0,
     moveIndex: 0,
     moveTotal: 0,
@@ -105,7 +133,7 @@ export class Game {
   private audio: AudioEngine;
   private tracker: PoseTracker | null;
   private renderer: SceneRenderer | null;
-  private onDeath: (s: Stats) => void;
+  private onDeath: (s: Stats, why: DeathCause | null) => void;
   private onEnding: (s: Stats) => void;
 
   private w = 0;
@@ -122,6 +150,9 @@ export class Game {
   private lastBeat = 0;
   private audioClockOn = false;
   private musicOn = false;
+  private realMusicStarted = false;
+  private musicLevelStart = 0;
+  private finaleSection: "breakdown" | "peak" | null = null;
 
   private level = 0;
   private plan: LevelPlan | null = null;
@@ -155,6 +186,10 @@ export class Game {
 
   private deadT = 0;
   private hitSfx = false;
+  private warned = false;
+  /** 0..1，死亡前摇进度：给玩家半秒"我知道我错了"的时间 */
+  private warn = 0;
+  private cause: DeathCause | null = null;
   private lunge = 0;
   private dark = 0;
   private blood = 0;
@@ -216,6 +251,9 @@ export class Game {
     this.snapPulse = 0;
     this.deadT = 0;
     this.hitSfx = false;
+    this.warned = false;
+    this.warn = 0;
+    this.cause = null;
     this.lunge = 0;
     this.dark = 0;
     this.blood = 0;
@@ -223,6 +261,9 @@ export class Game {
     this.glitch = 0;
     this.endingT = 0;
     this.reported = false;
+    this.finaleSection = null;
+    this.realMusicStarted = false;
+    this.audio.stopGroove();
     this.hud.dots = [];
     this.hud.moveName = "";
     this.hud.key = "";
@@ -346,7 +387,21 @@ export class Game {
   /** AudioContext 是单点故障：挂起/未初始化时退回帧时钟，恢复时重新锚定，不倒退也不跳拍。 */
   private syncBeat(): void {
     const step = (this.dt * this.bpm) / 60;
-    if (this.audio.isRunning()) {
+    const pos = this.audio.musicPosition;
+    if (pos !== null) {
+      // 真实背景乐在播：拍子从音乐的实际播放位置算，和歌严丝合缝。
+      let next = ((pos - this.musicLevelStart) * this.bpm) / 60;
+      if (next < 0) next = 0;
+      const drift = next - this.lastBeat;
+      // 音频被挂起过、或者刚切回音乐时钟：重新对齐本关起点，宁可连续也不跳拍。
+      const stalled = drift < -0.05 || drift > step * 3 + 0.25;
+      if (stalled) {
+        this.musicLevelStart = pos - ((this.lastBeat + step) * 60) / this.bpm;
+        next = this.lastBeat + step;
+      }
+      this.beat = next;
+      this.audioClockOn = true;
+    } else if (this.audio.isRunning()) {
       const raw = this.audio.now();
       let next = ((raw - this.beatOrigin) * this.bpm) / 60;
       const drift = next - this.lastBeat;
@@ -366,16 +421,36 @@ export class Game {
   }
 
   private startMusic(bpm: number, layers: number): void {
-    this.bpm = bpm;
-    this.audio.setTempo(bpm);
+    // 有真实背景乐时，速度必须以歌为准（129.2），不能再用关卡的估算值
+    this.bpm = this.audio.hasMusicFile ? SONG_BPM : bpm;
+    this.audio.setTempo(this.bpm);
     this.audio.setLayers(layers);
     this.audio.restoreMusic();
-    this.audio.stopGroove();
-    this.audio.startGroove();
-    this.beatOrigin = this.audio.now() + 0.08;
-    this.beat = 0;
-    this.lastBeat = 0;
-    this.audioClockOn = this.audio.isRunning();
+
+    if (this.audio.hasMusicFile) {
+      // 整首歌只播一遍：关卡切换、教程切正式关都不打断它。
+      if (!this.realMusicStarted) {
+        // mp3 可能是程序合成兜底已经起播之后才解码完的，先让位再切过去。
+        this.audio.stopGroove();
+        this.audio.startGroove();
+        this.realMusicStarted = true;
+        this.musicLevelStart = 0;
+      } else {
+        // 同一首歌还在放：把当前播放位置当作这一关的零点，拍子照样从 0 起算。
+        this.musicLevelStart = this.audio.musicPosition ?? 0;
+      }
+      this.beat = 0;
+      this.lastBeat = 0;
+      this.audioClockOn = false;
+    } else {
+      // 没有真实文件：退回原来的行为，每关重新起拍。
+      this.audio.stopGroove();
+      this.audio.startGroove();
+      this.beatOrigin = this.audio.now() + 0.08;
+      this.beat = 0;
+      this.lastBeat = 0;
+      this.audioClockOn = this.audio.isRunning();
+    }
     this.musicOn = true;
   }
 
@@ -407,6 +482,7 @@ export class Game {
     this.resetWindow();
     this.startMusic(100, 0);
     this.hud.round = "教学";
+    this.hud.roundTotal = "";
     this.hud.moveTotal = TUTORIAL.length;
     this.hud.subtitle = "先看她跳两遍。";
   }
@@ -494,6 +570,7 @@ export class Game {
     this.level = n;
     this.stats.level = n;
     this.plan = levelPlan(n);
+    this.finaleSection = null;
     this.stats.zombies = this.plan.zombieCount;
     this.moveIndex = -1;
     this.results = new Array(this.plan.moveIds.length).fill("");
@@ -501,7 +578,9 @@ export class Game {
     this.resetWindow();
     this.setInstructor(BASE, true);
     this.hud.tutorial = false;
+    // 全局进度：玩家要知道「熬到头」在哪，恐惧才会转成专注
     this.hud.round = `第 ${n} 关`;
+    this.hud.roundTotal = `共 ${MAX_LEVEL} 关`;
     this.hud.moveTotal = this.plan.moveIds.length;
     this.hud.moveIndex = 0;
     this.hud.dots = this.results.slice();
@@ -520,11 +599,19 @@ export class Game {
     }
     const idx = Math.floor(t / plan.beatsPerMove);
     if (idx >= plan.moveIds.length) {
+      // 掉帧跨过了最后一个动作的判定窗口尾巴时，先补判，别白丢一个动作
+      if (!this.resolved) this.judgeLevel(this.moveIndex);
+      if (this.phase !== "level") return;
       this.clearLevel();
       return;
     }
     const move = MOVES[plan.moveIds[idx]];
     if (idx !== this.moveIndex) {
+      // 一帧跨过上一个动作的判定窗口（低帧率/截屏卡顿）时补判，宁可算过也别静默吞掉
+      if (this.moveIndex >= 0 && this.moveIndex < plan.moveIds.length && !this.resolved) {
+        this.judgeLevel(this.moveIndex);
+        if (this.phase !== "level") return;
+      }
       this.moveIndex = idx;
       this.resetWindow();
       this.setInstructor(move.params);
@@ -535,7 +622,7 @@ export class Game {
     this.hud.moveName = move.name;
     this.hud.key = move.key;
     this.hud.subtitle =
-      t < 4 ? LEVEL_LINES[this.level] ?? "" : this.combo >= 3 ? `连对 ${this.combo}` : "";
+      t < 4 ? this.levelLine() : this.combo >= 3 ? `连对 ${this.combo}` : "";
     this.sample();
     if (!this.resolved && local > plan.beatsPerMove - 0.15) this.judgeLevel(idx);
   }
@@ -574,13 +661,51 @@ export class Game {
       this.hud.meter = 1;
     } else {
       this.failed = true;
-      this.die();
+      this.die(key);
     }
   }
 
+  /** 终章：动作收回到核心四动作，分 breakdown / peak 两段跑 */
+  private startFinale(section: "breakdown" | "peak"): void {
+    this.phase = "level";
+    this.phaseT = 0;
+    this.level = MAX_LEVEL;
+    this.stats.level = MAX_LEVEL;
+    this.finaleSection = section;
+    this.plan = finalePlan(section);
+    this.stats.zombies = this.plan.zombieCount;
+    this.moveIndex = -1;
+    this.results = new Array(this.plan.moveIds.length).fill("");
+    this.prevZombieP = [];
+    this.resetWindow();
+    this.setInstructor(BASE, true);
+    this.hud.tutorial = false;
+    this.hud.round = section === "breakdown" ? "终章 · 收" : "终章 · 高潮";
+    this.hud.roundTotal = "最后一段";
+    this.hud.moveTotal = this.plan.moveIds.length;
+    this.hud.moveIndex = 0;
+    this.hud.dots = this.results.slice();
+    this.hud.subtitle = section === "breakdown" ? "音乐落下去。只剩这四个动作。" : "抬头。看月亮。";
+    this.startMusic(this.plan.bpm, MAX_LEVEL);
+  }
+
+  private levelLine(): string {
+    if (this.finaleSection === "breakdown") return "收回来。";
+    if (this.finaleSection === "peak") return "跟着她。";
+    return LEVEL_LINES[this.level] ?? "";
+  }
+
   private clearLevel(): void {
-    if (this.level >= MAX_LEVEL) {
+    if (this.finaleSection === "breakdown") {
+      this.startFinale("peak");
+      return;
+    }
+    if (this.finaleSection === "peak") {
       this.toEnding();
+      return;
+    }
+    if (this.level >= MAX_LEVEL) {
+      this.startFinale("breakdown");
       return;
     }
     this.phase = "levelup";
@@ -589,37 +714,82 @@ export class Game {
     this.audio.stinger();
   }
 
-  private die(): void {
+  /** 判错时先把「哪一关、第几拍、该做什么、你做了什么」记下来，结算页要用 */
+  private buildCause(pressed: string): DeathCause {
+    const plan = this.plan;
+    const idx = this.moveIndex;
+    const moveId = plan && idx >= 0 && idx < plan.moveIds.length ? plan.moveIds[idx] : null;
+    const move = moveId ? MOVES[moveId] : null;
+    const pressedId = pressed ? KEY_MOVE[pressed] : "";
+    return {
+      level: Math.max(1, this.level),
+      moveNo: idx >= 0 ? idx + 1 : 0,
+      moveTotal: plan ? plan.moveIds.length : 0,
+      expected: move ? move.name : "",
+      expectedKey: move ? move.key : "",
+      pressed,
+      pressedName: pressedId && MOVES[pressedId] ? MOVES[pressedId].name : pressed,
+      mode: this.mode,
+    };
+  }
+
+  private die(pressed = ""): void {
     if (this.phase === "dead") return;
     this.phase = "dead";
     this.phaseT = 0;
     this.deadT = 0;
+    this.warned = false;
+    this.warn = 0;
     this.lunge = 0;
-    this.shake = 1;
-    this.glitch = 0.85;
+    this.cause = this.buildCause(pressed);
+    // 前摇的第一拍：音乐先空掉、乌鸦先炸开。惨叫压到撞上玻璃的那一刻。
+    this.shake = 0.22;
+    this.glitch = 0.3;
     this.hud.meter = 0;
     this.hud.subtitle = "";
     this.hud.moveName = "";
     this.hud.key = "";
-    this.audio.scream();
-    this.audio.crowd();
     this.audio.silenceMusic();
+    this.audio.crow();
   }
 
   private tickDead(dt: number): void {
     this.deadT += dt;
-    this.lunge = Math.min(1, this.deadT / 0.26);
-    if (!this.hitSfx && this.deadT > 0.3) {
+    // t < 0 的那段是前摇：有预兆，但还没扑上来
+    const t = this.deadT - DEATH_WARN;
+
+    if (t < 0) {
+      this.warn = Math.min(1, this.deadT / DEATH_WARN);
+      this.lunge = 0;
+      this.shake = 0.22 + this.warn * 0.3;
+      this.glitch = 0.3 + this.warn * 0.5;
+      // 血色先渗进来一点：厅堂本来就压着冷绿，红一出现玩家就知道出事了
+      this.blood = this.warn * 0.26;
+      return;
+    }
+
+    if (!this.warned) {
+      this.warned = true;
+      this.warn = 1;
+      this.shake = 1;
+      this.glitch = 0.95;
+      this.audio.scream();
+      this.audio.crowd();
+    }
+
+    this.lunge = Math.min(1, t / 0.26);
+    if (!this.hitSfx && t > 0.3) {
       this.hitSfx = true;
       this.audio.glass();
       this.shake = 1;
       this.glitch = 1;
     }
-    this.blood = Math.min(1, Math.max(0, (this.deadT - 0.25) / 0.3));
-    this.dark = Math.min(1, Math.max(0, (this.deadT - 0.7) / 0.8));
+    this.blood = Math.min(1, 0.26 + Math.min(1, Math.max(0, (t - 0.12) / 0.42)) * 0.74);
+    this.dark = Math.min(1, Math.max(0, (t - 0.7) / 0.8));
+    this.warn = Math.max(0, 1 - t / 0.3);
     if (this.deadT > 2.6 && !this.reported) {
       this.reported = true;
-      this.onDeath({ ...this.stats, level: this.level });
+      this.onDeath({ ...this.stats, level: this.level }, this.cause);
     }
   }
 

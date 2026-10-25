@@ -1,7 +1,7 @@
 import "./style.css";
 import { AudioEngine } from "./audio";
-import { Game, GameMode, Hud, Stats } from "./game";
-import { MOVES } from "./moves";
+import { Game, GameMode, Hud, Stats, DeathCause } from "./game";
+import { MAX_LEVEL, MOVES } from "./moves";
 import { PoseTracker } from "./pose";
 import { buildPose } from "./rig";
 import { createStage3D, SceneRenderer } from "./render3d";
@@ -117,6 +117,7 @@ function syncHud(h: Hud) {
   toggle(hudEl, "cinema", h.cinema);
   toggle(tutbar, "hidden", !h.tutorial);
   text("round", h.round);
+  text("round-total", h.roundTotal);
   text("score", String(h.hits));
   text("moveinfo", h.moveTotal ? `${h.moveIndex} / ${h.moveTotal}` : "");
   text("cue-name", h.moveName);
@@ -162,7 +163,27 @@ function hitsLabel(id: string, s: Stats) {
   text(id, s.tutorialHits === 0 ? "跳对" : s.hits > s.tutorialHits ? "跳对 · 含教学" : "跳对 · 全是教学");
 }
 
-function showDeath(s: Stats) {
+/** 把死亡归因写成一句人话：哪一关、第几拍、该做什么、你做了什么。 */
+function whyText(why: DeathCause): string {
+  // 「第 3 拍 / 8」读起来像分数；写成「第 3 / 8 拍」才知道分母是这一关的总拍数
+  const beat = why.moveNo > 0
+    ? (why.moveTotal ? `第 ${why.moveNo} / ${why.moveTotal} 拍` : `第 ${why.moveNo} 拍`)
+    : "起手前";
+  const head = `${why.level > MAX_LEVEL ? "终章" : `第 ${why.level} 关`} · ${beat}`;
+  if (!why.expected) return head;
+  const want = `「${why.expectedKey} ${why.expected}」`;
+  let detail: string;
+  if (why.mode === "camera") {
+    detail = `该做${want}，身体没有到那个位置`;
+  } else if (why.pressed) {
+    detail = `该按${want}，你按了「${why.pressed} ${why.pressedName}」`;
+  } else {
+    detail = `该按${want}，这一拍没跟上`;
+  }
+  return `${head} · ${detail}`;
+}
+
+function showDeath(s: Stats, why: DeathCause | null) {
   hudHold = true;
   hudEl.classList.add("hidden");
   const line =
@@ -172,6 +193,9 @@ function showDeath(s: Stats) {
         ? "你跳错的那一下，她看见了。\n镜子里的每一个人都看见了。"
         : "你已经快跳到最后了。\n可他们的手，从来不在乎你跳到第几个。";
   (document.getElementById("final-line") as HTMLElement).textContent = line;
+  const whyEl = document.getElementById("final-why") as HTMLElement;
+  whyEl.textContent = why ? whyText(why) : "";
+  whyEl.classList.toggle("hidden", !why);
   text("final-level", `第 ${Math.max(1, s.level)} 关`);
   text("final-hits", String(s.hits));
   hitsLabel("final-hits-lbl", s);
