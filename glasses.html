@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#05070a" />
+    <meta name="description" content="MOONLIGHT · AI 眼镜版。戴上眼镜，站在手机前，跟着她跳完最后一支舞。" />
+    <title>MOONLIGHT · 眼镜版</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M40 8a26 26 0 1 0 0 48A30 30 0 0 1 40 8z' fill='%23d42a32'/%3E%3C/svg%3E"
+    />
+    <script type="module" crossorigin src="/moonnight/assets/glasses-SXUB9dk7.js"></script>
+    <link rel="modulepreload" crossorigin href="/moonnight/assets/preload-helper-Cm7P2oqM.js">
+    <link rel="stylesheet" crossorigin href="/moonnight/assets/glasses-DAkRVcd0.css">
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="gl"></canvas>
+      <canvas id="flat" class="hidden"></canvas>
+      <video id="cam" playsinline muted autoplay></video>
+
+      <!-- 游戏中 -->
+      <div id="hud" class="hidden">
+        <div class="hud-top">
+          <div class="stage-no"><b id="round">STAGE 1</b> <span id="round-total">/ 6</span></div>
+          <div class="dots" id="dots"></div>
+        </div>
+        <div class="hud-cue">
+          <div class="cue-key" id="cue-key">↑</div>
+          <div class="cue-name" id="cue-name">伸手</div>
+        </div>
+        <div class="hud-bottom">
+          <div class="meter"><i id="meter"></i></div>
+          <div class="sub" id="sub"></div>
+        </div>
+      </div>
+
+      <div id="warn">画面里没有你 · 退后一步</div>
+
+      <!-- 标题 -->
+      <div id="start" class="screen">
+        <div class="rule"></div>
+        <h1 class="title">MOON<em>LIGHT</em></h1>
+        <div class="tagline">戴 上 眼 镜 · 站 在 手 机 前</div>
+        <div class="brief">
+          手机横放在支架上，镜头对着你，戴上眼镜。<br />
+          跟着镜中的她跳：<b>伸手</b>　<b>退步</b>　<b>转身</b>　<b>抬头</b><br />
+          跳错一拍，你就留在最后一排。
+        </div>
+        <button id="btn-start" class="btn">开 始</button>
+        <div class="note" id="note">需要摄像头 · 全程免触</div>
+        <div class="rule"></div>
+      </div>
+
+      <!-- 序幕 -->
+      <div id="intro" class="screen hidden">
+        <div id="line-wrap"><div id="line"></div></div>
+        <div class="pips" id="pips"></div>
+        <div id="hint">点 一 下 继 续</div>
+      </div>
+
+      <!-- 死亡 -->
+      <div id="result" class="screen hidden">
+        <div class="h2 blood">你 留 在 了 最 后 一 排</div>
+        <div class="why" id="final-why"></div>
+        <div class="stats">
+          <div>跳对<b id="final-hits">0</b></div>
+          <div>完美<b id="final-perfect">0</b></div>
+          <div>走到<b id="final-level">1</b></div>
+        </div>
+        <button id="btn-again" class="btn">再 来 一 支</button>
+      </div>
+
+      <!-- 结局 -->
+      <div id="ending" class="screen hidden">
+        <div class="rule"></div>
+        <div class="h2">她 放 下 了 手</div>
+        <div class="why" id="ending-line"></div>
+        <div class="stats">
+          <div>跳对<b id="ending-hits">0</b></div>
+          <div>完美<b id="ending-perfect">0</b></div>
+        </div>
+        <button id="btn-again2" class="btn">再 跳 一 次</button>
+      </div>
+
+      <!-- 竖屏拦截 -->
+      <div id="rotate">
+        <div class="rot">请 把 手 机 横 过 来</div>
+        <div class="rot-sub">
+          眼镜是一块 16:9 的屏幕。<br />
+          竖着拿，镜片里会有两条大黑边。
+        </div>
+      </div>
+    </div>
+
+  </body>
+</html>

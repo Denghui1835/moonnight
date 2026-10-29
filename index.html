@@ -21,13 +21,22 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23050607'/%3E%3Ccircle cx='30' cy='30' r='18' fill='%23b9d4cf'/%3E%3Ccircle cx='39' cy='23' r='16' fill='%23050607'/%3E%3C/svg%3E"
     />
     <title>MOONLIGHT · DEAD BEAT</title>
-    <script type="module" crossorigin src="/moonnight/assets/index-BJx2M67z.js"></script>
-    <link rel="stylesheet" crossorigin href="/moonnight/assets/index-DN0XBI9r.css">
+    <script type="module" crossorigin src="/moonnight/assets/main-BcczJWHx.js"></script>
+    <link rel="modulepreload" crossorigin href="/moonnight/assets/preload-helper-Cm7P2oqM.js">
+    <link rel="stylesheet" crossorigin href="/moonnight/assets/main-D28O8x7u.css">
   </head>
   <body>
     <div id="app">
       <canvas id="stage3d"></canvas>
       <canvas id="stage"></canvas>
+      <canvas id="explore" class="hidden"></canvas>
+      <div id="explore-controls" class="explore-controls hidden" aria-label="探索移动控制">
+        <button type="button" data-explore-key="arrowleft">←</button>
+        <button type="button" data-explore-key="arrowup">↑</button>
+        <button type="button" data-explore-key="arrowdown">↓</button>
+        <button type="button" data-explore-key="arrowright">→</button>
+        <button type="button" data-explore-key="e" class="explore-interact">E 互动</button>
+      </div>
       <div class="vignette"></div>
       <div class="grain"></div>
 
@@ -99,6 +108,7 @@
           </div>
         </div>
         <div class="actions">
+          <button id="btn-explore" class="primary explore-entry">进入剧院探索</button>
           <button id="btn-cam" class="primary">用摄像头跟练</button>
           <button id="btn-keys" class="ghost">键盘模式<span class="only-keys">（方向键）</span><span class="only-touch">（触屏点下面四个键）</span></button>
         </div>
